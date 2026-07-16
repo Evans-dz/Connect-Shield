@@ -63,9 +63,9 @@ export default function Nav() {
         </nav>
 
         <div className="hidden md:flex items-center gap-2">
-          <a href={SITE.appUrl} className="px-3.5 py-2 text-sm text-slate-faint hover:text-white transition-colors">
+          <Link href="/login" className="px-3.5 py-2 text-sm text-slate-faint hover:text-white transition-colors">
             Sign in
-          </a>
+          </Link>
           <Link href="/demo" className="px-4 py-2 text-sm font-medium rounded-lg" style={{ background: "#B8863F", color: "#0E1830" }}>
             Book a demo
           </Link>
@@ -92,9 +92,9 @@ export default function Nav() {
             </Link>
           ))}
           <div className="flex gap-2 mt-3">
-            <a href={SITE.appUrl} className="flex-1 text-center px-4 py-2.5 text-sm rounded-lg text-white" style={{ border: "1px solid #243354" }}>
+            <Link href="/login" onClick={() => setOpen(false)} className="flex-1 text-center px-4 py-2.5 text-sm rounded-lg text-white" style={{ border: "1px solid #243354" }}>
               Sign in
-            </a>
+            </Link>
             <Link href="/demo" onClick={() => setOpen(false)} className="flex-1 text-center px-4 py-2.5 text-sm font-medium rounded-lg" style={{ background: "#B8863F", color: "#0E1830" }}>
               Book a demo
             </Link>
