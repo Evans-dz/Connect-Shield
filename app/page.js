@@ -43,7 +43,7 @@ export default function Home() {
             <div>
               <div className="eyebrow animate-fade-up" style={{ color: "#E8CFA0" }}>Hospice Compliance Intelligence</div>
               <h1 className="font-display text-white mt-4 animate-fade-up" style={{ fontSize: "clamp(2.4rem, 5vw, 3.6rem)", lineHeight: 1.05, animationDelay: "60ms" }}>
-                The compliance score CMS keeps on your hospice — decoded.
+                CMS is scoring your hospice - Do you know your number?.
               </h1>
               <p className="text-base md:text-lg mt-5 max-w-lg animate-fade-up" style={{ color: "#AEBAD0", animationDelay: "120ms" }}>
                 CMS now scores every hospice from 0 to 16 on nine claims-based measures. Connect Shield shows you your number, reads your own reports alongside it, and tells you exactly what to fix — securely, and built to HIPAA standards.
