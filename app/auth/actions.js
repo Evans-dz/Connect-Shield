@@ -13,7 +13,16 @@ export async function signIn(prevState, formData) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: "Incorrect email or password." };
 
-  // Step 4 will replace this with a redirect to the user's clinic subdomain.
+  // Send the user to their own clinic's subdomain. The session cookie is scoped to
+  // the parent domain, so it carries across. Falls back to /dashboard if no clinic
+  // is assigned yet (e.g. a bare test user).
+  let slug = null;
+  try {
+    const { data } = await supabase.rpc("my_clinic_slug");
+    slug = data;
+  } catch {}
+
+  if (slug) redirect(`https://${slug}.connect-shield.com`);
   redirect("/dashboard");
 }
 
