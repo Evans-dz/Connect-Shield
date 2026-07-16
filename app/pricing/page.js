@@ -6,7 +6,7 @@ import { SITE } from "@/lib/site";
 export const metadata = {
   title: "Pricing — Every Tool, Every Update, One Price",
   description:
-    "Connect Shield pricing for hospice agencies. Every plan includes every compliance tool and all future features — you only pay for how many agencies and people you have. Zero PHI.",
+    "Connect Shield pricing for hospice agencies. Every plan includes every compliance tool and all future features — you only pay for how many agencies and people you have. HIPAA-compliant.",
   alternates: { canonical: `${SITE.url}/pricing` },
 };
 
@@ -136,7 +136,7 @@ export default function Pricing() {
             No feature tiers, no add-on traps. Every plan includes the entire platform and every future feature we ship. You only pay for how many agencies and people you have.
           </p>
           <div className="flex items-center justify-center gap-2 mt-6 text-[12px] font-mono animate-fade-up" style={{ color: "#7C8AA8", animationDelay: "140ms" }}>
-            Unlimited AI analysis (fair use) · All future features included · Zero PHI
+            Unlimited AI analysis (fair use) · All future features included · HIPAA-compliant
           </div>
         </div>
       </section>
@@ -222,7 +222,7 @@ export default function Pricing() {
         </div>
 
         <p className="text-center text-[12px] font-mono mt-8" style={{ color: "#8992A3" }}>
-          Monthly, cancel anytime · Annual available (2 months free) · Every plan is zero-PHI with a secure per-clinic portal
+          Monthly, cancel anytime · Annual available (2 months free) · Every plan is HIPAA-compliant with a secure per-clinic portal
         </p>
       </section>
 

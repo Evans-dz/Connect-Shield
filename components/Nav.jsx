@@ -19,11 +19,12 @@ export default function Nav() {
 
   return (
     <header
-      className="sticky top-0 z-50 transition-colors"
+      className="sticky top-0 z-50 transition-shadow"
       style={{
-        background: scrolled ? "rgba(14,24,48,0.92)" : "rgba(14,24,48,0)",
-        backdropFilter: scrolled ? "saturate(140%) blur(10px)" : "none",
-        borderBottom: scrolled ? "1px solid #243354" : "1px solid transparent",
+        background: "rgba(14,24,48,0.95)",
+        backdropFilter: "saturate(140%) blur(10px)",
+        borderBottom: "1px solid #243354",
+        boxShadow: scrolled ? "0 8px 30px rgba(0,0,0,0.28)" : "none",
       }}
     >
       <div className="max-w-content mx-auto px-5 md:px-8 h-16 flex items-center justify-between">

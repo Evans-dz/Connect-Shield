@@ -97,7 +97,7 @@ export default function DemoForm() {
         {state === "sending" ? "Sending" : "Request my demo"}
       </button>
       <p className="text-[11px] font-mono text-center mt-3" style={{ color: "#8992A3" }}>
-        No patient data required · We reply within one business day
+        No sensitive data needed · We reply within one business day
       </p>
     </div>
   );

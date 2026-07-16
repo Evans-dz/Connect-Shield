@@ -16,7 +16,7 @@ export default function Footer() {
               <span className="font-display text-lg text-white">{SITE.name}</span>
             </div>
             <p className="text-sm mt-4 max-w-xs" style={{ color: "#93A0B8" }}>
-              {SITE.tagline}. Built for hospice leadership, on public CMS data, with zero patient information.
+              Confidence starts with visibility. Built for hospice leadership on public CMS data — HIPAA-compliant and encrypted throughout.
             </p>
           </div>
 

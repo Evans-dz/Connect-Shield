@@ -6,7 +6,7 @@ import { SITE } from "@/lib/site";
 export const metadata = {
   title: "Book a Demo — Hospice Compliance Intelligence",
   description:
-    "Book a Connect Shield demo. We'll set up your secure portal, load your CCN, and walk your team through your SSVI score and full compliance picture. Zero PHI required.",
+    "Book a Connect Shield demo. We'll set up your secure portal, load your CCN, and walk your team through your SSVI score and full compliance picture. HIPAA-compliant.",
   alternates: { canonical: `${SITE.url}/demo` },
 };
 

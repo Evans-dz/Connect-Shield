@@ -39,7 +39,7 @@ export default function CCNTeaser() {
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: "#14213D", border: "1px solid #243354" }}>
       <div className="p-6 md:p-8">
-        <div className="eyebrow" style={{ color: "#E8CFA0" }}>Free · Zero PHI · All 7,059 US hospices</div>
+        <div className="eyebrow" style={{ color: "#E8CFA0" }}>Free · HIPAA-compliant · All 7,059 US hospices</div>
         <h3 className="font-display text-2xl md:text-[26px] text-white mt-3">Look up your hospice's SSVI score</h3>
         <p className="text-sm mt-2 max-w-md" style={{ color: "#93A0B8" }}>
           Enter your CCN to see your published CMS score and risk level instantly. Sign in to unlock the full nine-measure breakdown.

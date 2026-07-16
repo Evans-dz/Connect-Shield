@@ -113,7 +113,7 @@ export default function SolutionPage({ params }) {
                 Every capability in Connect Shield connects back to your SSVI. Look yours up free, then book a demo to see the full breakdown and your {s.term} analysis together.
               </p>
               <div className="flex items-center gap-2 mt-5 text-[12px] font-mono" style={{ color: "#7C8AA8" }}>
-                <ShieldCheck size={14} color="#B8863F" /> Zero PHI · Public CMS data
+                <ShieldCheck size={14} color="#B8863F" /> HIPAA-compliant · Public CMS data
               </div>
             </Reveal>
             <Reveal delay={80}>

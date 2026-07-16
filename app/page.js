@@ -46,7 +46,7 @@ export default function Home() {
                 The compliance score CMS keeps on your hospice — decoded.
               </h1>
               <p className="text-base md:text-lg mt-5 max-w-lg animate-fade-up" style={{ color: "#AEBAD0", animationDelay: "120ms" }}>
-                CMS now scores every hospice from 0 to 16 on nine claims-based measures. Connect Shield shows you your number, reads your own reports alongside it, and tells you exactly what to fix — with zero patient data.
+                CMS now scores every hospice from 0 to 16 on nine claims-based measures. Connect Shield shows you your number, reads your own reports alongside it, and tells you exactly what to fix — securely, and built to HIPAA standards.
               </p>
               <div className="flex flex-wrap gap-3 mt-7 animate-fade-up" style={{ animationDelay: "180ms" }}>
                 <Link href="/demo" className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-medium" style={{ background: "#B8863F", color: "#0E1830" }}>
@@ -57,7 +57,7 @@ export default function Home() {
                 </a>
               </div>
               <div className="flex items-center gap-2 mt-6 text-[12px] font-mono animate-fade-up" style={{ color: "#7C8AA8", animationDelay: "240ms" }}>
-                <ShieldCheck size={14} color="#B8863F" /> Zero PHI · Built on public CMS data · SOC 2-style access controls
+                <ShieldCheck size={14} color="#B8863F" /> HIPAA-compliant · Encrypted, role-based access · Built on public CMS data
               </div>
             </div>
 
@@ -109,6 +109,21 @@ export default function Home() {
               </Reveal>
             );
           })}
+        </div>
+      </section>
+
+      {/* ── MISSION ───────────────────────────────────────── */}
+      <section style={{ background: "#F7F0E1" }}>
+        <div className="max-w-content mx-auto px-5 md:px-8 py-20 md:py-28 text-center">
+          <Reveal>
+            <div className="eyebrow justify-center">Visibility · Compliance · Confidence</div>
+            <h2 className="font-display text-ink mt-4 mx-auto max-w-3xl" style={{ fontSize: "clamp(2rem, 4vw, 3rem)", lineHeight: 1.08 }}>
+              Confidence starts with visibility.
+            </h2>
+            <p className="text-slate mt-5 max-w-2xl mx-auto text-base md:text-lg">
+              Our mission is to empower hospice leadership with the intelligence, tools, and visibility needed to navigate compliance with confidence.
+            </p>
+          </Reveal>
         </div>
       </section>
 
@@ -184,7 +199,7 @@ export default function Home() {
         <div className="max-w-content mx-auto px-5 md:px-8 py-16">
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { icon: ShieldCheck, h: "Zero PHI, by design", p: "We work from CMS agency-level data and the reports you upload — never patient identifiers. No PHI means no HIPAA exposure for the data we hold." },
+              { icon: ShieldCheck, h: "HIPAA-compliant by design", p: "Connect Shield is built and operated to HIPAA standards. Your data is encrypted in transit and at rest, and we work from CMS agency-level data and the reports you upload." },
               { icon: Lock, h: "Secure per-clinic access", p: "Each hospice gets its own portal with hashed credentials, encrypted sessions, and multi-factor authentication support." },
               { icon: Check, h: "Sourced straight from CMS", p: "SSVI figures come directly from the CMS-1851-P file. Every measure we show reconciles to your published score." },
             ].map((c, i) => {
