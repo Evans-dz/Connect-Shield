@@ -1,0 +1,36 @@
+name: Add clinic user
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: "Existing clinic subdomain slug (e.g. evergreen)"
+        required: true
+      member_email:
+        description: "New user's login email"
+        required: true
+      member_name:
+        description: "Full name (optional)"
+        required: false
+      role:
+        description: "Role"
+        required: true
+        default: "member"
+        type: choice
+        options: ["member", "admin", "owner"]
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install @supabase/supabase-js
+      - run: node .github/scripts/add-user.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SLUG: ${{ inputs.slug }}
+          MEMBER_EMAIL: ${{ inputs.member_email }}
+          MEMBER_NAME: ${{ inputs.member_name }}
+          ROLE: ${{ inputs.role }}
