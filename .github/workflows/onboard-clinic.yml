@@ -1,0 +1,44 @@
+name: Onboard clinic
+on:
+  workflow_dispatch:
+    inputs:
+      clinic_name:
+        description: "Clinic name (e.g. Evergreen Hospice LLC)"
+        required: true
+      slug:
+        description: "Subdomain slug (e.g. evergreen) — lowercase, no spaces"
+        required: true
+      owner_email:
+        description: "Owner login email"
+        required: true
+      owner_name:
+        description: "Owner full name (optional)"
+        required: false
+      ccns:
+        description: "CCN(s), comma-separated (e.g. B51562,A12345)"
+        required: false
+      plan:
+        description: "Plan"
+        required: true
+        default: "single"
+        type: choice
+        options: ["single", "multi", "enterprise"]
+jobs:
+  onboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install @supabase/supabase-js
+      - run: node .github/scripts/onboard-clinic.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          CLINIC_NAME: ${{ inputs.clinic_name }}
+          SLUG: ${{ inputs.slug }}
+          OWNER_EMAIL: ${{ inputs.owner_email }}
+          OWNER_NAME: ${{ inputs.owner_name }}
+          CCNS: ${{ inputs.ccns }}
+          PLAN: ${{ inputs.plan }}
