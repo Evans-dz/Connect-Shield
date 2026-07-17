@@ -140,6 +140,12 @@ async function callClaudeWithRetry(system, userText, maxTokens, maxRetries = 3) 
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
+// Shared with DocumentLibrary.jsx — the private per-clinic storage bucket.
+const DOC_BUCKET = "clinic-docs";
+// Storage object keys can't contain spaces/quotes/slashes; keep them safe + short.
+function sanitizeFileName(name) {
+  return (name || "file").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "file";
+}
 const severityColor = (s) => s === "high" ? "#D14343" : s === "medium" ? "#C98A1F" : "#2E9E62";
 const scoreColor = (s) => s >= 85 ? "#2E9E62" : s >= 70 ? "#C98A1F" : "#D14343";
 const ssviColor = (s) => s <= 4 ? "#2E9E62" : s <= 7 ? "#C98A1F" : "#D14343";
@@ -1003,7 +1009,8 @@ function isReportFile(f) {
   return t === "application/pdf" || n.endsWith(".pdf");
 }
 
-function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLookup }) {
+function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLookup, clinicId }) {
+  const [supabase] = useState(() => createClient());
   const [files, setFiles] = useState([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [progress, setProgress] = useState("");
@@ -1037,15 +1044,46 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
         extractedTexts[file.name] = { type, text };
         reportSummaries[type] = (reportSummaries[type] || "") + `\n\n=== ${file.name} ===\n${text.substring(0, 2500)}`;
       }
-      setProgress("Saving to Document Library…");
-      for (const file of files) {
-        const { type, text } = extractedTexts[file.name];
-        await saveDocumentToLibrary(DEMO_ORG_ID, {
-          id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          filename: file.name, reportType: type, reportTypeLabel: getReportTypeLabel(type),
-          fileSize: file.size, uploadedAt: new Date().toISOString(),
-          textPreview: text.substring(0, 600), orgId: DEMO_ORG_ID,
-        });
+      // Persist each report to the shared per-clinic store in Supabase:
+      // the file itself into the clinic-docs bucket, and a row (with the
+      // extracted text) into clinic_documents so Atlas can read it later and
+      // it shows up in the Document Library vault. This does NOT affect the
+      // dashboard analysis below — that runs regardless of save success.
+      setProgress("Saving to your document library…");
+      try {
+        const { data: { user } = {} } = await supabase.auth.getUser();
+        if (clinicId && user) {
+          for (const file of files) {
+            const { type, text } = extractedTexts[file.name];
+            const path = `${clinicId}/${Date.now()}_${sanitizeFileName(file.name)}`;
+            const { error: upErr } = await supabase.storage
+              .from(DOC_BUCKET)
+              .upload(path, file, { upsert: false, contentType: file.type || undefined });
+            if (upErr) { console.error("[report-upload] storage upload error", upErr); continue; }
+            const { error: rowErr } = await supabase.from("clinic_documents").insert({
+              clinic_id: clinicId,
+              uploaded_by: user.id,
+              file_name: file.name,
+              storage_path: path,
+              file_size: file.size,
+              mime_type: file.type || null,
+              extracted_text: (text || "").slice(0, 200000),
+              report_type: type,
+              source: "report-upload",
+            });
+            if (rowErr) {
+              console.error("[report-upload] row insert error", rowErr);
+              await supabase.storage.from(DOC_BUCKET).remove([path]);
+            } else {
+              console.log("[report-upload] saved to library:", file.name);
+            }
+          }
+        } else {
+          console.warn("[report-upload] skipped library save — missing clinicId or user");
+        }
+      } catch (saveErr) {
+        // Never let a save problem block the compliance analysis.
+        console.error("[report-upload] library save failed", saveErr);
       }
       if (onDocsUpdated) onDocsUpdated();
       const reportsFound = Object.keys(reportSummaries);
@@ -1747,7 +1785,8 @@ function stripMarkdown(s = "") {
     .trim();
 }
 
-function Atlas({ analysisData, ssviData }) {
+function Atlas({ analysisData, ssviData, clinicId }) {
+  const [supabase] = useState(() => createClient());
   const [messages, setMessages] = useState([
     { role: "assistant", text: "I'm Atlas, your compliance intelligence assistant. I have access to your uploaded documents and SSVI data. Ask me about your PS&R metrics, SSVI score breakdown, CAP exposure, survey findings, or any hospice regulatory question." },
   ]);
@@ -1759,7 +1798,27 @@ function Atlas({ analysisData, ssviData }) {
   const ssviResolved = ssviData ? resolveSSVI(ssviData) : null;
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
-  useEffect(() => { getDocumentLibrary(DEMO_ORG_ID).then(docs => setLibraryDocs(docs || [])); }, []);
+  // Pull this clinic's documents (with extracted text) from Supabase so Atlas
+  // can answer from anything uploaded via the vault OR Report Upload, on any
+  // device or browser — real per-clinic memory, not this session's localStorage.
+  useEffect(() => {
+    if (!clinicId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("clinic_documents")
+          .select("file_name, report_type, extracted_text, created_at")
+          .eq("clinic_id", clinicId)
+          .order("created_at", { ascending: false })
+          .limit(20);
+        if (!cancelled && !error) setLibraryDocs(data || []);
+      } catch (e) {
+        console.warn("[atlas] could not load documents", e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [supabase, clinicId]);
 
   const buildContext = () => {
     let ctx = "CLINIC DATA:\n";
@@ -1776,9 +1835,10 @@ function Atlas({ analysisData, ssviData }) {
     }
     if (libraryDocs.length > 0) {
       ctx += `\nDOCUMENT LIBRARY (${libraryDocs.length} docs):\n`;
-      libraryDocs.slice(0, 6).forEach(doc => {
-        ctx += `- ${doc.reportTypeLabel}: ${doc.filename}\n`;
-        if (doc.textPreview) ctx += `  ${doc.textPreview.substring(0, 200)}\n`;
+      libraryDocs.slice(0, 8).forEach(doc => {
+        const label = doc.report_type ? getReportTypeLabel(doc.report_type) : "Document";
+        ctx += `- ${label}: ${doc.file_name}\n`;
+        if (doc.extracted_text) ctx += `  ${doc.extracted_text.substring(0, 1200)}\n`;
       });
     }
     return ctx;
@@ -2077,12 +2137,13 @@ export default function ConnectShield({ initialCcn = null, clinicName = null, cl
               onDocsUpdated={() => setLibRefresh(n => n + 1)}
               onSSVIData={handleSsviData}
               hideLookup={lockedCcn}
+              clinicId={clinicId}
             />
           )}
-          {tab === "library" && <DocumentVault clinicId={clinicId} />}
+          {tab === "library" && <DocumentVault clinicId={clinicId} extractText={extractAnyFile} />}
           {tab === "chart" && <ChartReview />}
           {tab === "reg" && <RegulatoryWatch clinicId={clinicId} />}
-          {tab === "atlas" && <Atlas analysisData={analysisData} ssviData={ssviData} />}
+          {tab === "atlas" && <Atlas analysisData={analysisData} ssviData={ssviData} clinicId={clinicId} />}
         </div>
       </main>
 
