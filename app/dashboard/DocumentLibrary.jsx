@@ -14,11 +14,11 @@ import {
   HardDrive,
 } from "lucide-react";
 
-// ── Config ────────────────────────────────────────────────
+// ── Config ───────────────────────────────────────────────────────────────────
 const BUCKET = "clinic-docs";
 const STORAGE_LIMIT_BYTES = 1024 * 1024 * 1024; // 1 GB Supabase free tier
 
-// ── Palette (navy) ────────────────────────────────────────
+// ── Palette (navy) ───────────────────────────────────────────────────────────
 const NAVY = "#0B1F3A";
 const NAVY_SOFT = "#14315C";
 const BORDER = "#E2E8F0";
@@ -26,7 +26,7 @@ const MUTED = "#64748B";
 const DANGER = "#DC2626";
 const BG_SOFT = "#F8FAFC";
 
-// ── Helpers ───────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function formatBytes(bytes) {
   if (!bytes || bytes <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB"];
@@ -59,7 +59,7 @@ function iconFor(mime, name) {
   return FileIcon;
 }
 
-// ── Component ─────────────────────────────────────────────
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function DocumentLibrary({ clinicId }) {
   const [supabase] = useState(() => createClient());
   const [docs, setDocs] = useState([]);
@@ -74,19 +74,31 @@ export default function DocumentLibrary({ clinicId }) {
 
   const loadDocs = useCallback(async () => {
     if (!clinicId) {
+      console.warn("[vault] loadDocs skipped — no clinicId prop");
       setLoading(false);
       return;
     }
     setLoading(true);
     setError("");
-    const { data, error } = await supabase
-      .from("clinic_documents")
-      .select("*")
-      .eq("clinic_id", clinicId)
-      .order("created_at", { ascending: false });
-    if (error) setError(error.message);
-    else setDocs(data || []);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase
+        .from("clinic_documents")
+        .select("*")
+        .eq("clinic_id", clinicId)
+        .order("created_at", { ascending: false });
+      if (error) {
+        console.error("[vault] loadDocs error", error);
+        setError("Could not load documents: " + error.message);
+      } else {
+        console.log("[vault] loadDocs ok — rows:", (data || []).length);
+        setDocs(data || []);
+      }
+    } catch (e) {
+      console.error("[vault] loadDocs threw", e);
+      setError("Could not load documents: " + (e?.message || String(e)));
+    } finally {
+      setLoading(false);
+    }
   }, [supabase, clinicId]);
 
   useEffect(() => {
@@ -96,53 +108,68 @@ export default function DocumentLibrary({ clinicId }) {
   const handleFiles = useCallback(
     async (fileList) => {
       const files = Array.from(fileList || []);
-      if (!files.length || !clinicId) return;
-      setUploading(true);
-      setError("");
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        setError("Not signed in. Please refresh and sign in again.");
-        setUploading(false);
+      console.log("[vault] handleFiles called — file count:", files.length, "clinicId:", clinicId);
+      if (!files.length) return;
+      if (!clinicId) {
+        setError("No clinic ID is available in this view, so the upload can't be scoped. (clinicId prop is null/undefined.)");
         return;
       }
 
-      for (const file of files) {
-        const path = `${clinicId}/${Date.now()}_${sanitizeName(file.name)}`;
+      setUploading(true);
+      setError("");
+      try {
+        const { data: { user } = {}, error: userErr } = await supabase.auth.getUser();
+        if (userErr) throw new Error("Auth check failed: " + userErr.message);
+        if (!user) {
+          setError("Not signed in. Please refresh and sign in again.");
+          return;
+        }
+        console.log("[vault] authenticated user:", user.id);
 
-        const { error: upErr } = await supabase.storage
-          .from(BUCKET)
-          .upload(path, file, {
-            upsert: false,
-            contentType: file.type || undefined,
+        for (const file of files) {
+          const path = `${clinicId}/${Date.now()}_${sanitizeName(file.name)}`;
+          console.log("[vault] uploading", file.name, "→", path);
+
+          const { error: upErr } = await supabase.storage
+            .from(BUCKET)
+            .upload(path, file, {
+              upsert: false,
+              contentType: file.type || undefined,
+            });
+
+          if (upErr) {
+            console.error("[vault] storage upload error", upErr);
+            setError(`Upload failed for ${file.name}: ${upErr.message}`);
+            continue;
+          }
+          console.log("[vault] storage upload ok — inserting metadata row");
+
+          const { error: rowErr } = await supabase.from("clinic_documents").insert({
+            clinic_id: clinicId,
+            uploaded_by: user.id,
+            file_name: file.name,
+            storage_path: path,
+            file_size: file.size,
+            mime_type: file.type || null,
           });
 
-        if (upErr) {
-          setError(`Upload failed for ${file.name}: ${upErr.message}`);
-          continue;
+          // If the metadata row fails (e.g. RLS), roll back the orphaned object.
+          if (rowErr) {
+            console.error("[vault] row insert error", rowErr);
+            await supabase.storage.from(BUCKET).remove([path]);
+            setError(`Could not save ${file.name}: ${rowErr.message}`);
+          } else {
+            console.log("[vault] row inserted ok for", file.name);
+          }
         }
-
-        const { error: rowErr } = await supabase.from("clinic_documents").insert({
-          clinic_id: clinicId,
-          uploaded_by: user.id,
-          file_name: file.name,
-          storage_path: path,
-          file_size: file.size,
-          mime_type: file.type || null,
-        });
-
-        // If the metadata row fails (e.g. RLS), roll back the orphaned object.
-        if (rowErr) {
-          await supabase.storage.from(BUCKET).remove([path]);
-          setError(`Could not save ${file.name}: ${rowErr.message}`);
-        }
+      } catch (e) {
+        console.error("[vault] unexpected error in handleFiles", e);
+        setError("Unexpected error while uploading: " + (e?.message || String(e)));
+      } finally {
+        setUploading(false);
+        if (inputRef.current) inputRef.current.value = "";
+        loadDocs();
       }
-
-      setUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
-      loadDocs();
     },
     [supabase, clinicId, loadDocs]
   );
@@ -150,14 +177,19 @@ export default function DocumentLibrary({ clinicId }) {
   const download = useCallback(
     async (doc) => {
       setError("");
-      const { data, error } = await supabase.storage
-        .from(BUCKET)
-        .createSignedUrl(doc.storage_path, 60, { download: doc.file_name });
-      if (error || !data?.signedUrl) {
-        setError(`Could not open ${doc.file_name}: ${error?.message || "unknown error"}`);
-        return;
+      try {
+        const { data, error } = await supabase.storage
+          .from(BUCKET)
+          .createSignedUrl(doc.storage_path, 60, { download: doc.file_name });
+        if (error || !data?.signedUrl) {
+          setError(`Could not open ${doc.file_name}: ${error?.message || "unknown error"}`);
+          return;
+        }
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      } catch (e) {
+        console.error("[vault] download threw", e);
+        setError(`Could not open ${doc.file_name}: ${e?.message || String(e)}`);
       }
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
     },
     [supabase]
   );
@@ -166,16 +198,22 @@ export default function DocumentLibrary({ clinicId }) {
     async (doc) => {
       if (!window.confirm(`Delete "${doc.file_name}"? This cannot be undone.`)) return;
       setError("");
-      // Storage first: if this fails, the row survives as a recoverable pointer
-      // rather than leaving an invisible orphan file eating your quota.
-      const { error: sErr } = await supabase.storage.from(BUCKET).remove([doc.storage_path]);
-      if (sErr) {
-        setError(`Could not delete file: ${sErr.message}`);
-        return;
+      try {
+        // Storage first: if this fails, the row survives as a recoverable pointer
+        // rather than leaving an invisible orphan file eating your quota.
+        const { error: sErr } = await supabase.storage.from(BUCKET).remove([doc.storage_path]);
+        if (sErr) {
+          setError(`Could not delete file: ${sErr.message}`);
+          return;
+        }
+        const { error: rErr } = await supabase.from("clinic_documents").delete().eq("id", doc.id);
+        if (rErr) setError(`File removed, but record delete failed: ${rErr.message}`);
+      } catch (e) {
+        console.error("[vault] remove threw", e);
+        setError(`Could not delete ${doc.file_name}: ${e?.message || String(e)}`);
+      } finally {
+        loadDocs();
       }
-      const { error: rErr } = await supabase.from("clinic_documents").delete().eq("id", doc.id);
-      if (rErr) setError(`File removed, but record delete failed: ${rErr.message}`);
-      loadDocs();
     },
     [supabase, loadDocs]
   );
@@ -186,7 +224,7 @@ export default function DocumentLibrary({ clinicId }) {
     if (!uploading) handleFiles(e.dataTransfer.files);
   };
 
-  // ── Render ──────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div style={{ maxWidth: 960, margin: "0 auto" }}>
       {/* Header + usage */}
