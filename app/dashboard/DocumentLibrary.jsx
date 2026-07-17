@@ -60,7 +60,7 @@ function iconFor(mime, name) {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function DocumentLibrary({ clinicId }) {
+export default function DocumentLibrary({ clinicId, extractText }) {
   const [supabase] = useState(() => createClient());
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -142,8 +142,21 @@ export default function DocumentLibrary({ clinicId }) {
             setError(`Upload failed for ${file.name}: ${upErr.message}`);
             continue;
           }
-          console.log("[vault] storage upload ok — inserting metadata row");
+          console.log("[vault] storage upload ok — extracting text");
 
+          // Extract text so Atlas can read this document. extractText comes from
+          // the parent (ConnectShieldApp's extractAnyFile); images return no text.
+          let extractedText = "";
+          if (extractText) {
+            try {
+              const ex = await extractText(file);
+              if (ex && ex.kind === "text" && ex.text) extractedText = ex.text;
+            } catch (exErr) {
+              console.warn("[vault] text extraction failed for", file.name, exErr);
+            }
+          }
+
+          console.log("[vault] inserting metadata row");
           const { error: rowErr } = await supabase.from("clinic_documents").insert({
             clinic_id: clinicId,
             uploaded_by: user.id,
@@ -151,6 +164,8 @@ export default function DocumentLibrary({ clinicId }) {
             storage_path: path,
             file_size: file.size,
             mime_type: file.type || null,
+            extracted_text: extractedText ? extractedText.slice(0, 200000) : null,
+            source: "vault",
           });
 
           // If the metadata row fails (e.g. RLS), roll back the orphaned object.
