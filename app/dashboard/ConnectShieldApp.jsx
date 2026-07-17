@@ -201,6 +201,7 @@ function detectReportType(filename, text) {
   if (fn.includes("survey") || tx.includes("statement of deficiencies") || tx.includes("cms-2567")) return "survey";
   if (fn.includes("policy") || fn.includes("manual") || fn.includes("procedure")) return "policy";
   if (fn.includes("beneficiar") || fn.includes("b51562") || fn.includes("hcr01") || tx.includes("beneficiary count summary") || tx.includes("fractional beneficiary") || tx.includes("cap year")) return "beneficiary";
+  if (fn.includes("pepper") || tx.includes("hospice pepper") || tx.includes("compare targets report")) return "pepper";
   if (fn.includes("compare") || tx.includes("hospice compare")) return "cms_public";
   if (tx.includes("provider statistical and reimbursement") || tx.includes("provider summary report") || tx.includes("statistic section") || tx.includes("medicare days") || fn.includes("summary25")) return "psr";
   return "psr";
@@ -226,6 +227,90 @@ async function extractPDFText(file) {
     text += content.items.map(item => item.str).join(" ") + "\n";
   }
   return text;
+}
+
+// ─── EXCEL / WORD / TEXT / IMAGE EXTRACTION ───────────────────────────────────
+async function extractExcelText(file) {
+  if (!window.XLSX) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  const ab = await file.arrayBuffer();
+  const wb = window.XLSX.read(ab, { type: "array" });
+  let out = "";
+  for (const name of wb.SheetNames) {
+    const csv = window.XLSX.utils.sheet_to_csv(wb.Sheets[name]);
+    if (csv && csv.trim()) out += `\n\n=== SHEET: ${name} ===\n${csv}`;
+  }
+  return out.trim();
+}
+
+async function extractWordText(file) {
+  if (!window.mammoth) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js";
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  const ab = await file.arrayBuffer();
+  const r = await window.mammoth.extractRawText({ arrayBuffer: ab });
+  return (r && r.value) || "";
+}
+
+async function extractPlainText(file) {
+  try { return await file.text(); } catch { return ""; }
+}
+
+async function fileToImageBlock(file) {
+  const dataUrl = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+  const comma = dataUrl.indexOf(",");
+  const meta = dataUrl.slice(0, comma);
+  const b64 = dataUrl.slice(comma + 1);
+  const mediaType = (meta.match(/data:(.*?);/) || [])[1] || file.type || "image/png";
+  return { mediaType, data: b64 };
+}
+
+// Route any uploaded file to the right extractor. Returns {kind:"text",text} or {kind:"image",image}.
+async function extractAnyFile(file) {
+  const name = (file.name || "").toLowerCase();
+  const type = file.type || "";
+  try {
+    if (type === "application/pdf" || name.endsWith(".pdf")) return { kind: "text", text: await extractPDFText(file) };
+    if (name.endsWith(".xlsx") || name.endsWith(".xls") || type.includes("spreadsheet") || type.includes("excel")) return { kind: "text", text: await extractExcelText(file) };
+    if (name.endsWith(".docx") || type.includes("word") || type.includes("officedocument.wordprocessing")) return { kind: "text", text: await extractWordText(file) };
+    if (type.startsWith("image/") || /\.(png|jpe?g|gif|webp)$/.test(name)) return { kind: "image", image: await fileToImageBlock(file) };
+    if (name.endsWith(".csv") || name.endsWith(".txt") || name.endsWith(".json") || type.startsWith("text/")) return { kind: "text", text: await extractPlainText(file) };
+    return { kind: "text", text: await extractPlainText(file) };
+  } catch (e) {
+    return { kind: "text", text: `[Could not read ${file.name}: ${e.message}]` };
+  }
+}
+
+// Send text + optional images to Claude as a vision-capable message. Returns raw text.
+async function callClaudeDocs(system, textContent, imageBlocks = [], maxTokens = 2000) {
+  const content = [];
+  if (textContent && textContent.trim()) content.push({ type: "text", text: textContent });
+  for (const img of imageBlocks) content.push({ type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } });
+  if (content.length === 0) content.push({ type: "text", text: "(no content)" });
+  const res = await fetch("/api/claude", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages: [{ role: "user", content }] }),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  const data = await res.json();
+  return (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
 }
 
 // ─── PROMPTS ──────────────────────────────────────────────────────────────────
@@ -911,6 +996,15 @@ function Dashboard({ analysisData, ssviData, hideLookup }) {
 }
 
 // ─── UPLOAD HUB ───────────────────────────────────────────────────────────────
+// Report Upload accepts PDFs and Excel (PEPPER comes as .xlsx).
+function isReportFile(f) {
+  const n = (f.name || "").toLowerCase();
+  const t = f.type || "";
+  return t === "application/pdf" || n.endsWith(".pdf") ||
+    n.endsWith(".xlsx") || n.endsWith(".xls") || n.endsWith(".csv") ||
+    t.includes("spreadsheet") || t.includes("excel");
+}
+
 function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLookup }) {
   const [files, setFiles] = useState([]);
   const [analyzing, setAnalyzing] = useState(false);
@@ -921,12 +1015,12 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
 
   const onDrop = useCallback((e) => {
     e.preventDefault(); setDragOver(false);
-    const dropped = Array.from(e.dataTransfer.files).filter(f => f.type === "application/pdf");
+    const dropped = Array.from(e.dataTransfer.files).filter(isReportFile);
     setFiles(prev => { const ex = new Set(prev.map(f => f.name)); return [...prev, ...dropped.filter(f => !ex.has(f.name))]; });
   }, []);
 
   const onFileSelect = (e) => {
-    const selected = Array.from(e.target.files).filter(f => f.type === "application/pdf");
+    const selected = Array.from(e.target.files).filter(isReportFile);
     setFiles(prev => { const ex = new Set(prev.map(f => f.name)); return [...prev, ...selected.filter(f => !ex.has(f.name))]; });
     e.target.value = "";
   };
@@ -939,7 +1033,8 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
       const extractedTexts = {};
       for (const file of files) {
         setProgress(`Reading ${file.name}…`);
-        const text = await extractPDFText(file);
+        const _r = await extractAnyFile(file);
+        const text = _r.kind === "text" ? _r.text : "";
         const type = detectReportType(file.name, text);
         extractedTexts[file.name] = { type, text };
         reportSummaries[type] = (reportSummaries[type] || "") + `\n\n=== ${file.name} ===\n${text.substring(0, 2500)}`;
@@ -1012,7 +1107,7 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
           onClick={() => !analyzing && fileRef.current?.click()}
           className="rounded-xl p-8 flex flex-col items-center justify-center gap-3 text-center cursor-pointer transition-all"
           style={{ background: dragOver ? "#F7F0E1" : "#F5F6F8", border: `2px dashed ${dragOver ? "#B8863F" : "#C7CDD8"}` }}>
-          <input ref={fileRef} type="file" accept=".pdf" multiple className="hidden" onChange={onFileSelect} />
+          <input ref={fileRef} type="file" accept=".pdf,.xlsx,.xls,.csv" multiple className="hidden" onChange={onFileSelect} />
           <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: "#F7F0E1" }}>
             <Files size={24} color="#B8863F" />
           </div>
@@ -1212,76 +1307,167 @@ Physician certification: signed, no date visible on this copy.
 Face-to-face encounter note: "Patient seen, appropriate for hospice, continues to decline."`;
 
 function ChartReview() {
-  const [text, setText] = useState(SAMPLE_CHART);
+  const [files, setFiles] = useState([]);
+  const [pasted, setPasted] = useState("");
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState("");
   const [result, setResult] = useState(null);
+  const [raw, setRaw] = useState("");
   const [error, setError] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef();
+
+  const addFiles = (list) => {
+    const arr = Array.from(list);
+    setFiles((prev) => { const ex = new Set(prev.map((f) => f.name)); return [...prev, ...arr.filter((f) => !ex.has(f.name))]; });
+  };
+  const onDrop = (e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); };
+  const onSelect = (e) => { addFiles(e.target.files); e.target.value = ""; };
+  const removeFile = (name) => setFiles((prev) => prev.filter((f) => f.name !== name));
+  const clearAll = () => { setFiles([]); setPasted(""); setResult(null); setRaw(""); setError(null); setProgress(""); };
+
+  const empty = files.length === 0 && !pasted.trim();
 
   const analyze = async () => {
-    if (!text.trim()) return;
-    setLoading(true); setError(null); setResult(null);
-    const system = `You are a hospice compliance auditor for Connect Shield. Audit this chart against Medicare Hospice CoP. Start with { end with }. No other text: {"overallAssessment":"2 sentence summary","issues":[{"severity":"high","category":"string","finding":"string","recommendation":"string"}],"strengths":["string"]} Max 3 issues, 2 strengths.`;
-    const parsed = await callClaudeWithRetry(system, text, 2000, 3);
-    if (parsed && parsed.overallAssessment) setResult(parsed);
-    else setError("Could not analyze chart. Please try again.");
-    setLoading(false);
+    if (empty) return;
+    setLoading(true); setError(null); setResult(null); setRaw("");
+    try {
+      let textContent = "";
+      const images = [];
+      if (pasted.trim()) textContent += `=== PASTED CONTENT ===\n${pasted.trim()}\n\n`;
+      for (const file of files) {
+        setProgress(`Reading ${file.name}…`);
+        const r = await extractAnyFile(file);
+        if (r.kind === "image") images.push(r.image);
+        else textContent += `=== FILE: ${file.name} ===\n${(r.text || "").slice(0, 12000)}\n\n`;
+      }
+      textContent = textContent.slice(0, 24000);
+      setProgress("Analyzing…");
+      const system = `You are a hospice operations and compliance analyst for Connect Shield. You will receive the contents of one or more documents a hospice uploaded — it could be any report (PS&R, PEPPER, Beneficiary Count, CAHPS, survey, cost report), a clinical note, a chart, a policy, an email, a spreadsheet, or anything else. Read it and explain it in plain English for a hospice owner or administrator who is not a data expert.
+
+Return ONE JSON object and nothing else, in exactly this shape:
+{"docType":"a short label for what this document is","summary":"2 to 4 plain-English sentences: what this document is and the single most important takeaway","keyData":["the most important numbers or facts found, each stated plainly with context, up to 8 items"],"needsAttention":[{"item":"short label","detail":"what the concern is and the concrete action to take"}],"looksGood":["things the document shows the clinic is doing well, up to 5 items"]}
+
+Rules: Base every statement ONLY on the provided content — never invent numbers, findings, or requirements. You are NOT limited to compliance; explain whatever the document actually contains, and flag compliance concerns only when the content supports them. If a category has nothing, use an empty array. Inside the JSON strings use plain prose only — no markdown, asterisks, headers, backticks, or emojis.`;
+      const rawText = await callClaudeDocs(system, textContent, images, 2000);
+      setRaw(rawText);
+      const clean = rawText.replace(/^```json\s*/i, "").replace(/^```\s*/, "").replace(/```\s*$/, "").trim();
+      let parsed = null;
+      try { parsed = JSON.parse(clean); } catch {}
+      if (parsed && (parsed.summary || parsed.keyData)) setResult(parsed);
+    } catch (e) {
+      setError("Analysis error: " + e.message);
+    } finally { setLoading(false); setProgress(""); }
   };
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
-        <div className="flex items-center gap-2 mb-1">
-          <FileText size={16} color="#B8863F" />
-          <span style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-lg">Chart Auditor</span>
-          <span className="text-xs font-mono px-2 py-0.5 rounded ml-auto" style={{ background: "#F5F6F8", color: "#64708A" }}>Medicare Hospice CoP</span>
+      <div>
+        <div style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-2xl">Document Intelligence</div>
+        <p className="text-sm mt-1" style={{ color: "#64708A" }}>
+          Upload or paste any document — a report, note, chart, policy, spreadsheet, or image — and get a plain-English breakdown of what it says, what needs attention, and what looks good.
+        </p>
+      </div>
+
+      <div className="rounded-2xl p-5 space-y-4" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          onClick={() => fileRef.current && fileRef.current.click()}
+          className="rounded-xl p-6 text-center cursor-pointer transition-colors"
+          style={{ background: dragOver ? "#F7F0E1" : "#F5F6F8", border: `2px dashed ${dragOver ? "#B8863F" : "#C7CDD8"}` }}>
+          <input ref={fileRef} type="file" multiple className="hidden"
+            accept=".pdf,.xlsx,.xls,.csv,.txt,.json,.docx,.png,.jpg,.jpeg,.gif,.webp" onChange={onSelect} />
+          <Upload size={20} color="#B8863F" className="mx-auto mb-2" />
+          <div className="text-sm font-medium" style={{ color: "#16202E" }}>Drop files here or click to browse</div>
+          <div className="text-xs mt-1" style={{ color: "#8992A3" }}>PDF, Excel, Word, CSV, images, or text</div>
         </div>
-        <p className="text-sm mb-3" style={{ color: "#64708A" }}>Paste chart text, certifications, or IDG notes. AI flags missing elements and signature gaps against hospice Conditions of Participation.</p>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={9}
-          className="w-full rounded-xl p-3 text-sm font-mono focus:outline-none"
-          style={{ background: "#F5F6F8", border: "1px solid #E3E7ED", color: "#16202E" }} />
-        <div className="flex items-center gap-3 mt-3">
-          <button onClick={analyze} disabled={loading}
+
+        {files.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {files.map((f) => (
+              <div key={f.name} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs" style={{ background: "#F5F6F8", color: "#16202E" }}>
+                <FileText size={12} color="#B8863F" />
+                <span className="max-w-[180px] truncate">{f.name}</span>
+                <button onClick={(e) => { e.stopPropagation(); removeFile(f.name); }} className="ml-0.5" style={{ color: "#8992A3" }}><X size={12} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div>
+          <div className="text-xs uppercase tracking-widest font-mono mb-1.5" style={{ color: "#64708A" }}>Or paste content</div>
+          <textarea value={pasted} onChange={(e) => setPasted(e.target.value)} rows={5}
+            placeholder="Paste chart text, a report table, IDG notes, an email — anything you want explained."
+            className="w-full rounded-xl p-3 text-sm focus:outline-none"
+            style={{ background: "#F5F6F8", border: "1px solid #E3E7ED", color: "#16202E" }} />
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button onClick={analyze} disabled={loading || empty}
             className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium"
-            style={{ background: "#B8863F", color: "#1B2740" }}>
+            style={{ background: "#B8863F", color: "#1B2740", opacity: loading || empty ? 0.6 : 1 }}>
             {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-            {loading ? "Analyzing…" : "Analyze Chart"}
+            {loading ? (progress || "Analyzing…") : "Analyze"}
           </button>
-          <button onClick={() => { setText(SAMPLE_CHART); setResult(null); setError(null); }}
-            className="text-xs underline" style={{ color: "#64708A" }}>Reset to sample</button>
+          <button onClick={clearAll} disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm"
+            style={{ background: "#FFFFFF", color: "#64708A", border: "1px solid #E3E7ED" }}>
+            <Trash2 size={13} /> Clear
+          </button>
         </div>
       </div>
+
       {error && <div className="rounded-xl p-3 text-sm" style={{ background: "#FDECEA", color: "#B23A2E" }}>{error}</div>}
+
       {result && (
         <div className="rounded-2xl p-5 space-y-4" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED" }}>
           <div>
-            <div className="text-xs uppercase tracking-widest font-mono mb-1" style={{ color: "#64708A" }}>Assessment</div>
-            <p className="text-sm" style={{ color: "#16202E" }}>{result.overallAssessment}</p>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs uppercase tracking-widest font-mono" style={{ color: "#64708A" }}>Summary</span>
+              {result.docType && <span className="text-[10px] font-mono px-2 py-0.5 rounded" style={{ background: "#F5F6F8", color: "#B8863F" }}>{result.docType}</span>}
+            </div>
+            <p className="text-sm" style={{ color: "#16202E" }}>{result.summary}</p>
           </div>
-          {result.issues?.length > 0 && (
+
+          {Array.isArray(result.keyData) && result.keyData.length > 0 && (
             <div>
-              <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>Findings</div>
+              <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>Key data</div>
+              <ul className="space-y-1.5">
+                {result.keyData.map((k, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "#16202E" }}>
+                    <ChevronRight size={14} color="#B8863F" className="shrink-0 mt-0.5" /><span>{k}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {Array.isArray(result.needsAttention) && result.needsAttention.length > 0 && (
+            <div>
+              <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>Needs attention</div>
               <div className="space-y-2">
-                {result.issues.map((iss, i) => (
-                  <div key={i} className="flex gap-3 p-3 rounded-xl" style={{ background: "#F5F6F8" }}>
-                    <span className="text-[10px] uppercase font-mono px-2 py-1 rounded shrink-0 h-fit"
-                      style={{ background: severityColor(iss.severity) + "1A", color: severityColor(iss.severity) }}>{iss.severity}</span>
+                {result.needsAttention.map((n, i) => (
+                  <div key={i} className="flex gap-3 p-3 rounded-xl" style={{ background: "#FDF0EC", border: "1px solid #F3D6CC" }}>
+                    <AlertTriangle size={15} color="#C1543A" className="shrink-0 mt-0.5" />
                     <div className="min-w-0">
-                      <div className="text-xs font-mono mb-0.5" style={{ color: "#B8863F" }}>{iss.category}</div>
-                      <div className="text-sm" style={{ color: "#16202E" }}>{iss.finding}</div>
-                      <div className="text-sm mt-1" style={{ color: "#64708A" }}>→ {iss.recommendation}</div>
+                      <div className="text-sm font-medium" style={{ color: "#16202E" }}>{typeof n === "string" ? n : n.item}</div>
+                      {n && n.detail && <div className="text-sm mt-0.5" style={{ color: "#64708A" }}>{n.detail}</div>}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
-          {result.strengths?.length > 0 && (
+
+          {Array.isArray(result.looksGood) && result.looksGood.length > 0 && (
             <div>
-              <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>What's solid</div>
+              <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>Looks good</div>
               <ul className="space-y-1">
-                {result.strengths.map((s, i) => (
+                {result.looksGood.map((g, i) => (
                   <li key={i} className="text-sm flex gap-2" style={{ color: "#16202E" }}>
-                    <CheckCircle2 size={14} className="shrink-0 mt-0.5" color="#2E9E62" />{s}
+                    <CheckCircle2 size={14} className="shrink-0 mt-0.5" color="#2E9E62" />{g}
                   </li>
                 ))}
               </ul>
@@ -1289,9 +1475,17 @@ function ChartReview() {
           )}
         </div>
       )}
+
+      {!result && !error && raw && (
+        <div className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED" }}>
+          <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>Analysis</div>
+          <p className="text-sm" style={{ color: "#16202E", whiteSpace: "pre-wrap" }}>{stripMarkdown(raw)}</p>
+        </div>
+      )}
     </div>
   );
 }
+
 
 // ─── REGULATORY WATCH ─────────────────────────────────────────────────────────
 const REG_UPDATES = [
