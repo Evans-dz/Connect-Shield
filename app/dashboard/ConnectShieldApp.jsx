@@ -236,7 +236,7 @@ STATISTIC SECTION: MEDICARE DAYS | CLAIMS | TOTAL UNDUPLICATED CENSUS COUNT (eac
 CHARGE SECTION: 0551=Skilled Nursing 15-min units | 0561=Social Work | 0571=Aide | 0651=RHC days | 0250=Pharmacy
 REIMBURSEMENT SECTION: GROSS REIMBURSEMENT | SEQUESTRATION | NET REIMBURSEMENT
 
-BENEFICIARY COUNT B51562: Cap Year | Full Count | Fractional Count | Total Count table
+BENEFICIARY COUNT REPORT: Cap Year | Full Count | Fractional Count | Total Count table
 
 CALCULATIONS:
 - AvgLOS = Medicare Days ÷ Unduplicated Census
@@ -367,7 +367,7 @@ function CCNLookup({ onSSVIData, compact = false }) {
             value={ccn}
             onChange={(e) => setCcn(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleLookup()}
-            placeholder="Enter your CCN (e.g. B51562) — pulls your actual published CMS SSVI score instantly"
+            placeholder="Enter your CCN (e.g. 123456) — pulls your actual published CMS SSVI score instantly"
             className="flex-1 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none"
             style={{ background: "#FFFFFF", border: "1.5px solid #C7CDD8", color: "#16202E", fontSize: "13px" }}
           />
@@ -647,7 +647,7 @@ function Dashboard({ analysisData, ssviData, hideLookup }) {
         <div className="rounded-xl p-3 flex items-start gap-3" style={{ background: "#FEF3E2", border: "1px solid #F0C87A" }}>
           <AlertCircle size={15} color="#C98A1F" className="shrink-0 mt-0.5" />
           <div className="text-sm" style={{ color: "#7A5700" }}>
-            <strong>Tip:</strong> Upload both PS&R Report 810 and Beneficiary Count B51562 together for the most complete analysis. Enter your CCN above for actual published SSVI scores.
+            <strong>Tip:</strong> Upload both PS&R Report 810 and Beneficiary Count report together for the most complete analysis. Enter your CCN above for actual published SSVI scores.
           </div>
         </div>
       )}
@@ -1019,7 +1019,7 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
           <div>
             <div style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-lg">Drop all your reports here</div>
             <div className="text-sm mt-1" style={{ color: "#64708A" }}>
-              PS&R 810 · Beneficiary Count B51562 · PEPPER · CAHPS · QAPI · Survey Results · Policy Manuals · CMS Public Data
+              PS&R 810 · Beneficiary Count · PEPPER · CAHPS · QAPI · Survey Results · Policy Manuals · CMS Public Data
             </div>
             <div className="text-xs mt-2 font-mono" style={{ color: "#8992A3" }}>
               PDF only · Multiple files at once · AI auto-detects report type · All saved to Document Library
@@ -1107,7 +1107,7 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
         <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>💡 How to pull these reports from CMS CASPER</div>
         <div className="text-xs font-mono space-y-1" style={{ color: "#64708A" }}>
           <div>Log into <strong style={{ color: "#16202E" }}>EIDM</strong> at eidm.cms.gov → navigate to <strong style={{ color: "#16202E" }}>CASPER</strong> → Hospice Reports</div>
-          <div>PS&R Summary = <strong style={{ color: "#B8863F" }}>Report Type 810</strong> · Beneficiary Count = <strong style={{ color: "#B8863F" }}>Report B51562</strong></div>
+          <div>PS&R Summary = <strong style={{ color: "#B8863F" }}>Report Type 810</strong> · Beneficiary Count = <strong style={{ color: "#B8863F" }}>Beneficiary Count Summary</strong></div>
           <div>SSVI public scores = <strong style={{ color: "#B8863F" }}>cms.gov/medicare/quality/hospice</strong> → download provider-level SSVI data file</div>
         </div>
       </div>
@@ -1304,7 +1304,7 @@ const REG_UPDATES = [
     title:"FY2027 Hospice Proposed Rule — SSVI introduced as public scoring tool",
     summary:"CMS introduced the SSVI (0-16 scale) built from 9 claims-based measures. Utilization Score (0-8) covers RN visit intensity, LOS, live discharge, GIP ratio, weekend visits, end-of-life patterns. Non-Hospice Spending Score (0-8) covers Part A/B spending. Scores posted publicly.",
     impact:"Scores ≥10 signal meaningful deviation and may trigger program integrity review. Enter your CCN in Connect Shield for instant SSVI lookup.",
-    checklist:["Enter your CCN in Connect Shield for instant SSVI score.","Review RN intensity — Rev 0551 units ÷ Medicare days. Under 1.0 is flagged.","Pull PS&R Report 810 and Beneficiary Count B51562 from CASPER and upload.","Review all 8 utilization measures in your Connect Shield SSVI breakdown.","Brief your clinical team on weekend visit and end-of-life visit requirements."] },
+    checklist:["Enter your CCN in Connect Shield for instant SSVI score.","Review RN intensity — Rev 0551 units ÷ Medicare days. Under 1.0 is flagged.","Pull PS&R Report 810 and Beneficiary Count report from CASPER and upload.","Review all 8 utilization measures in your Connect Shield SSVI breakdown.","Brief your clinical team on weekend visit and end-of-life visit requirements."] },
   { id:"r3", date:"2026-05-14", source:"OIG", tag:"Program Integrity", severity:"medium",
     title:"OIG work plan adds hospice GIP level-of-care review",
     summary:"OIG focused on GIP level-of-care determinations — whether documentation supports acuity required for GIP billing.",

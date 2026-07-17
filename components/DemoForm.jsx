@@ -68,7 +68,7 @@ export default function DemoForm() {
         </div>
         <div>
           <label className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>CCN (optional)</label>
-          <input className={FIELD + " mt-1.5 font-mono"} style={FIELD_STYLE} value={form.ccn} onChange={set("ccn")} placeholder="B51562" />
+          <input className={FIELD + " mt-1.5 font-mono"} style={FIELD_STYLE} value={form.ccn} onChange={set("ccn")} placeholder="123456" />
         </div>
         <div className="sm:col-span-2">
           <label className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>Phone (optional)</label>

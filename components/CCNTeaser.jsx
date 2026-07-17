@@ -52,7 +52,7 @@ export default function CCNTeaser() {
               value={ccn}
               onChange={(e) => setCcn(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && run()}
-              placeholder="Enter your CCN (e.g. B51562)"
+              placeholder="Enter your CCN (e.g. 123456)"
               className="w-full rounded-xl pl-10 pr-4 py-3 text-sm font-mono text-white placeholder:text-slate-mute focus:outline-none"
               style={{ background: "#0E1830", border: "1px solid #243354" }}
               aria-label="CMS Certification Number"
