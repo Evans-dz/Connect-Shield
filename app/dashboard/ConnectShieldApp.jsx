@@ -9,7 +9,7 @@ import {
   Trash2, Eye, Search, Bot, Activity, Target, Zap, LogOut, ExternalLink,
 } from "lucide-react";
 import { createClient } from "@/lib/auth/client";
-import DocumentLibrary from "./DocumentLibrary";
+import DocumentVault from "./DocumentLibrary";
 const FONT_IMPORT = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 `;
@@ -996,13 +996,11 @@ function Dashboard({ analysisData, ssviData, hideLookup }) {
 }
 
 // ─── UPLOAD HUB ───────────────────────────────────────────────────────────────
-// Report Upload accepts PDFs and Excel (PEPPER comes as .xlsx).
+// Report Upload accepts PDFs only.
 function isReportFile(f) {
   const n = (f.name || "").toLowerCase();
   const t = f.type || "";
-  return t === "application/pdf" || n.endsWith(".pdf") ||
-    n.endsWith(".xlsx") || n.endsWith(".xls") || n.endsWith(".csv") ||
-    t.includes("spreadsheet") || t.includes("excel");
+  return t === "application/pdf" || n.endsWith(".pdf");
 }
 
 function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLookup }) {
@@ -1107,7 +1105,7 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
           onClick={() => !analyzing && fileRef.current?.click()}
           className="rounded-xl p-8 flex flex-col items-center justify-center gap-3 text-center cursor-pointer transition-all"
           style={{ background: dragOver ? "#F7F0E1" : "#F5F6F8", border: `2px dashed ${dragOver ? "#B8863F" : "#C7CDD8"}` }}>
-          <input ref={fileRef} type="file" accept=".pdf,.xlsx,.xls,.csv" multiple className="hidden" onChange={onFileSelect} />
+          <input ref={fileRef} type="file" accept=".pdf" multiple className="hidden" onChange={onFileSelect} />
           <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: "#F7F0E1" }}>
             <Files size={24} color="#B8863F" />
           </div>
@@ -1210,7 +1208,7 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
   );
 }
 
-// ─── DOCUMENT LIBRARY ─────────────────────────────────────────────────────────
+// ─── DOCUMENT LIBRARY (legacy local store — kept for Atlas context only) ──────
 function DocumentLibrary({ refreshTrigger }) {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2081,7 +2079,7 @@ export default function ConnectShield({ initialCcn = null, clinicName = null, cl
               hideLookup={lockedCcn}
             />
           )}
-          {tab === "library" && <DocumentLibrary refreshTrigger={libRefresh} />}
+          {tab === "library" && <DocumentVault clinicId={clinicId} />}
           {tab === "chart" && <ChartReview />}
           {tab === "reg" && <RegulatoryWatch clinicId={clinicId} />}
           {tab === "atlas" && <Atlas analysisData={analysisData} ssviData={ssviData} />}
