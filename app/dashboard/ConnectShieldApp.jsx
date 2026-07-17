@@ -1541,6 +1541,20 @@ function RegulatoryWatch({ clinicId }) {
 }
 
 // ─── ATLAS (formerly Copilot) ─────────────────────────────────────────────────
+// Safety net: strip any residual markdown/emojis so Atlas replies render as clean prose.
+function stripMarkdown(s = "") {
+  return String(s)
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*]\s+/gm, "")
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function Atlas({ analysisData, ssviData }) {
   const [messages, setMessages] = useState([
     { role: "assistant", text: "I'm Atlas, your compliance intelligence assistant. I have access to your uploaded documents and SSVI data. Ask me about your PS&R metrics, SSVI score breakdown, CAP exposure, survey findings, or any hospice regulatory question." },
@@ -1589,7 +1603,9 @@ function Atlas({ analysisData, ssviData }) {
 
 ${buildContext()}
 
-Answer questions about PS&R Report 810, Beneficiary Count B51562, PEPPER, CAHPS, QAPI, survey deficiencies, SSVI scoring (0-16, lower is better, national avg 6.42, 9 utilization measures each worth 1 point plus non-hospice spending score 0-8), MAC/RAC audits, CAP exposure, and Medicare Hospice CoP. Reference revenue codes (0551=SN visits 15-min, 0651=RHC days) and dollar amounts from this clinic's data. Keep answers under 200 words, conversational but precise.`;
+Answer questions about PS&R Report 810, the Beneficiary Count report, PEPPER, CAHPS, QAPI, survey deficiencies, SSVI scoring (0-16, lower is better, national avg 6.42, 9 utilization measures each worth 1 point plus non-hospice spending score 0-8), MAC/RAC audits, CAP exposure, and Medicare Hospice CoP. Reference revenue codes (0551=SN visits 15-min, 0651=RHC days) and dollar amounts from this clinic's data.
+
+Formatting: Write in clean, plain prose using complete sentences and short paragraphs. Do NOT use any markdown — no asterisks or ** bold, no # headers, no bullet dashes, no backticks, and no emojis. If listing items, use a natural sentence or plain separate lines. Keep answers under 200 words, conversational but precise.`;
       const reply = await callClaude(system, q, 600);
       setMessages(m => [...m, { role: "assistant", text: reply.trim() }]);
     } catch (e) {
@@ -1614,8 +1630,8 @@ Answer questions about PS&R Report 810, Beneficiary Count B51562, PEPPER, CAHPS,
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className="max-w-[85%] rounded-xl px-3 py-2 text-sm"
-              style={{ background: m.role === "user" ? "#B8863F" : "#F5F6F8", color: m.role === "user" ? "#1B2740" : "#16202E" }}>
-              {m.text}
+              style={{ background: m.role === "user" ? "#B8863F" : "#F5F6F8", color: m.role === "user" ? "#1B2740" : "#16202E", whiteSpace: "pre-wrap" }}>
+              {m.role === "assistant" ? stripMarkdown(m.text) : m.text}
             </div>
           </div>
         ))}
