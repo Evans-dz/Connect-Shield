@@ -35,5 +35,5 @@ export default async function DashboardPage() {
     ccn = ccns?.[0]?.ccn || null;
   }
 
-  return <ConnectShield initialCcn={ccn} clinicName={clinicName} signOutAction={signOut} />;
+  return <ConnectShield initialCcn={ccn} clinicName={clinicName} clinicId={profile?.clinic_id || null} signOutAction={signOut} />;
 }

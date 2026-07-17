@@ -1,13 +1,14 @@
 "use client";
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   FileText, ShieldCheck, MessageSquare, AlertTriangle,
   CheckCircle2, ChevronDown, ChevronRight, Send, Sparkles,
   TrendingUp, TrendingDown, Clock, BookOpen, Loader2,
   Minus, Upload, DollarSign, AlertCircle, X,
   BarChart3, Calendar, Home, PieChart, Files, Library,
-  Trash2, Eye, Search, Bot, Activity, Target, Zap, LogOut,
+  Trash2, Eye, Search, Bot, Activity, Target, Zap, LogOut, ExternalLink,
 } from "lucide-react";
+import { createClient } from "@/lib/auth/client";
 
 const FONT_IMPORT = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
@@ -1316,60 +1317,225 @@ const REG_UPDATES = [
     checklist:["Enter your CCN in Connect Shield to see your published score.","If score ≥8, develop remediation plan before next cycle.","Document SSVI outlier response in your QAPI program."] },
 ];
 
-function RegulatoryWatch() {
-  const [checked, setChecked] = useState({});
-  const toggle = (id, i) => setChecked(c => ({ ...c, [`${id}-${i}`]: !c[`${id}-${i}`] }));
+function RegulatoryWatch({ clinicId }) {
+  const supaRef = useRef(null);
+  const [view, setView] = useState("feed");           // "feed" | "library"
+  const [updates, setUpdates] = useState([]);
+  const [requirements, setRequirements] = useState([]);
+  const [progress, setProgress] = useState({});       // `${regId}-${idx}` -> true
+  const [loading, setLoading] = useState(true);
+  const [cat, setCat] = useState("all");
+
+  useEffect(() => {
+    const supabase = createClient();
+    supaRef.current = supabase;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [u, r, p] = await Promise.all([
+          supabase.from("reg_updates").select("*").eq("status", "published").order("published_date", { ascending: false }),
+          supabase.from("requirements").select("*").order("sort_order", { ascending: true }),
+          supabase.from("clinic_reg_progress").select("reg_update_id,item_index"),
+        ]);
+        if (cancelled) return;
+        setUpdates(u.data || []);
+        setRequirements(r.data || []);
+        const pm = {};
+        (p.data || []).forEach((row) => { pm[`${row.reg_update_id}-${row.item_index}`] = true; });
+        setProgress(pm);
+      } catch {
+        // leave lists empty on error
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const toggle = async (regId, idx) => {
+    const supabase = supaRef.current;
+    if (!supabase) return;
+    const key = `${regId}-${idx}`;
+    const wasChecked = !!progress[key];
+    setProgress((p) => { const n = { ...p }; if (wasChecked) delete n[key]; else n[key] = true; return n; });
+    try {
+      if (wasChecked) {
+        await supabase.from("clinic_reg_progress").delete().eq("reg_update_id", regId).eq("item_index", idx);
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        await supabase.from("clinic_reg_progress").insert({ clinic_id: clinicId, reg_update_id: regId, item_index: idx, checked_by: user?.id || null });
+      }
+    } catch {
+      // revert optimistic update on failure
+      setProgress((p) => { const n = { ...p }; if (wasChecked) n[key] = true; else delete n[key]; return n; });
+    }
+  };
+
+  // Action tracker: flatten every published rule's checklist, grouped by publish month.
+  const monthGroups = useMemo(() => {
+    const groups = {};
+    updates.forEach((u) => {
+      const list = Array.isArray(u.checklist) ? u.checklist : [];
+      const d = u.published_date ? new Date(u.published_date + "T00:00:00") : null;
+      const monthKey = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` : "0000-00";
+      const monthLabel = d ? d.toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "Undated";
+      if (!groups[monthKey]) groups[monthKey] = { label: monthLabel, items: [] };
+      list.forEach((text, idx) => groups[monthKey].items.push({ regId: u.id, idx, text }));
+    });
+    return Object.keys(groups).sort().reverse().map((k) => ({ key: k, ...groups[k] }));
+  }, [updates]);
+
+  const CATS = ["all", "Patient Rights & Assessment", "Care Planning & Coordination", "Quality & Safety", "Services", "Organization & Administration"];
+  const shownReqs = cat === "all" ? requirements : requirements.filter((r) => r.category === cat);
+  const reqByCat = useMemo(() => {
+    const m = {};
+    shownReqs.forEach((r) => { (m[r.category] = m[r.category] || []).push(r); });
+    return m;
+  }, [shownReqs]);
+
+  const pill = (active) => ({
+    background: active ? "#14213D" : "#FFFFFF",
+    color: active ? "#F3F5F8" : "#64708A",
+    border: active ? "1px solid #14213D" : "1px solid #E3E7ED",
+  });
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <BookOpen size={16} color="#B8863F" />
-        <span style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-lg">Regulatory Watch</span>
+    <div className="space-y-5">
+      {/* Header + view toggle */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <BookOpen size={16} color="#B8863F" />
+          <span style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-lg">Regulatory Watch</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => setView("feed")} className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors" style={pill(view === "feed")}>What's New</button>
+          <button onClick={() => setView("library")} className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors" style={pill(view === "library")}>What's Always Required</button>
+        </div>
       </div>
-      <p className="text-sm -mt-2" style={{ color: "#64708A" }}>New and changed hospice requirements, translated into what your agency needs to do.</p>
-      {REG_UPDATES.map(r => {
-        const total = r.checklist.length;
-        const done = r.checklist.filter((_, i) => checked[`${r.id}-${i}`]).length;
-        return (
-          <div key={r.id} className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] uppercase font-mono px-2 py-1 rounded"
-                  style={{ background: severityColor(r.severity) + "1A", color: severityColor(r.severity) }}>{r.severity} impact</span>
-                <span className="text-[11px] font-mono" style={{ color: "#8992A3" }}>{r.source} · {r.tag}</span>
+
+      {loading && (
+        <div className="flex items-center gap-2 text-sm py-10 justify-center" style={{ color: "#8992A3" }}>
+          <Loader2 size={16} className="animate-spin" /> Loading…
+        </div>
+      )}
+
+      {/* ── WHAT'S NEW: changes feed (left) + monthly action tracker (right) ── */}
+      {!loading && view === "feed" && (
+        <div className="grid lg:grid-cols-2 gap-4">
+          {/* Feed cards */}
+          <div className="space-y-4">
+            <div className="text-[11px] font-mono uppercase tracking-widest" style={{ color: "#8992A3" }}>New & changed requirements</div>
+            {updates.length === 0 && (
+              <div className="text-sm rounded-xl p-4" style={{ background: "#F5F6F8", color: "#64708A" }}>No new regulatory updates right now.</div>
+            )}
+            {updates.map((r) => (
+              <div key={r.id} className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] uppercase font-mono px-2 py-1 rounded" style={{ background: severityColor(r.severity) + "1A", color: severityColor(r.severity) }}>{r.severity} impact</span>
+                    <span className="text-[11px] font-mono" style={{ color: "#8992A3" }}>{r.source}{r.tag ? ` · ${r.tag}` : ""}</span>
+                  </div>
+                  <span className="text-[11px] font-mono flex items-center gap-1 shrink-0" style={{ color: "#8992A3" }}><Clock size={11} />{r.published_date}</span>
+                </div>
+                <h3 className="mt-2 text-base" style={{ fontFamily: "Fraunces, serif", color: "#16202E" }}>{r.title}</h3>
+                <p className="text-sm mt-1.5" style={{ color: "#64708A" }}>{r.summary}</p>
+                {r.impact && (
+                  <div className="mt-2 p-3 rounded-lg text-sm" style={{ background: "#F5F6F8", color: "#16202E" }}>
+                    <span className="font-mono text-xs" style={{ color: "#B8863F" }}>What it means for you: </span>{r.impact}
+                  </div>
+                )}
+                {r.source_url && (
+                  <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-mono mt-3" style={{ color: "#B8863F" }}>
+                    View source <ExternalLink size={11} />
+                  </a>
+                )}
               </div>
-              <span className="text-[11px] font-mono flex items-center gap-1 shrink-0" style={{ color: "#8992A3" }}>
-                <Clock size={11} />{r.date}
-              </span>
-            </div>
-            <h3 className="mt-2 text-base" style={{ fontFamily: "Fraunces, serif", color: "#16202E" }}>{r.title}</h3>
-            <p className="text-sm mt-1.5" style={{ color: "#64708A" }}>{r.summary}</p>
-            <div className="mt-2 p-3 rounded-lg text-sm" style={{ background: "#F5F6F8", color: "#16202E" }}>
-              <span className="font-mono text-xs" style={{ color: "#B8863F" }}>What it means for you: </span>{r.impact}
-            </div>
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs uppercase tracking-widest font-mono" style={{ color: "#64708A" }}>Action checklist</span>
-                <span className="text-xs font-mono" style={{ color: done === total ? "#2E9E62" : "#64708A" }}>{done}/{total} done</span>
-              </div>
-              {r.checklist.map((item, i) => {
-                const key = `${r.id}-${i}`;
-                const isChecked = !!checked[key];
-                return (
-                  <button key={i} onClick={() => toggle(r.id, i)}
-                    className="w-full flex items-start gap-2 text-left p-2 rounded-lg mb-1"
-                    style={{ background: isChecked ? "#EAF6EF" : "transparent" }}>
-                    <div className="w-4 h-4 rounded shrink-0 mt-0.5 flex items-center justify-center"
-                      style={{ border: `1.5px solid ${isChecked ? "#2E9E62" : "#C7CDD8"}`, background: isChecked ? "#2E9E62" : "transparent" }}>
-                      {isChecked && <CheckCircle2 size={10} color="#FFFFFF" />}
-                    </div>
-                    <span className="text-sm" style={{ color: isChecked ? "#64708A" : "#16202E", textDecoration: isChecked ? "line-through" : "none" }}>{item}</span>
-                  </button>
-                );
-              })}
-            </div>
+            ))}
           </div>
-        );
-      })}
+
+          {/* Monthly action tracker */}
+          <div className="space-y-4">
+            <div className="text-[11px] font-mono uppercase tracking-widest" style={{ color: "#8992A3" }}>Action tracker</div>
+            {monthGroups.length === 0 && (
+              <div className="text-sm rounded-xl p-4" style={{ background: "#F5F6F8", color: "#64708A" }}>No action items yet.</div>
+            )}
+            {monthGroups.map((g) => {
+              const done = g.items.filter((it) => progress[`${it.regId}-${it.idx}`]).length;
+              return (
+                <div key={g.key} className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Calendar size={13} color="#B8863F" />
+                      <span className="text-sm font-medium" style={{ color: "#16202E" }}>{g.label}</span>
+                    </div>
+                    <span className="text-xs font-mono" style={{ color: (done === g.items.length && g.items.length > 0) ? "#2E9E62" : "#64708A" }}>{done}/{g.items.length} done</span>
+                  </div>
+                  {g.items.map((it) => {
+                    const key = `${it.regId}-${it.idx}`;
+                    const isChecked = !!progress[key];
+                    return (
+                      <button key={key} onClick={() => toggle(it.regId, it.idx)} className="w-full flex items-start gap-2 text-left p-2 rounded-lg mb-1" style={{ background: isChecked ? "#EAF6EF" : "transparent" }}>
+                        <div className="w-4 h-4 rounded shrink-0 mt-0.5 flex items-center justify-center" style={{ border: `1.5px solid ${isChecked ? "#2E9E62" : "#C7CDD8"}`, background: isChecked ? "#2E9E62" : "transparent" }}>
+                          {isChecked && <CheckCircle2 size={10} color="#FFFFFF" />}
+                        </div>
+                        <span className="text-sm" style={{ color: isChecked ? "#64708A" : "#16202E", textDecoration: isChecked ? "line-through" : "none" }}>{it.text}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── WHAT'S ALWAYS REQUIRED: read-only Conditions of Participation library ── */}
+      {!loading && view === "library" && (
+        <div className="space-y-5">
+          <p className="text-sm -mt-1" style={{ color: "#64708A" }}>
+            The standing Medicare Conditions of Participation every hospice must meet — 42 CFR Part 418. Reference only.
+          </p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {CATS.map((c) => (
+              <button key={c} onClick={() => setCat(c)} className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors" style={pill(cat === c)}>
+                {c === "all" ? "All" : c}
+              </button>
+            ))}
+          </div>
+          {Object.keys(reqByCat).map((catName) => (
+            <div key={catName} className="space-y-3">
+              <div className="text-[11px] font-mono uppercase tracking-widest" style={{ color: "#8992A3" }}>{catName}</div>
+              <div className="grid md:grid-cols-2 gap-3">
+                {reqByCat[catName].map((req) => (
+                  <div key={req.id} className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-mono px-2 py-1 rounded" style={{ background: "#14213D", color: "#F3F5F8" }}>{req.section}</span>
+                      {req.subpart && <span className="text-[10px] font-mono" style={{ color: "#8992A3" }}>Subpart {req.subpart}</span>}
+                    </div>
+                    <h3 className="mt-2 text-base" style={{ fontFamily: "Fraunces, serif", color: "#16202E" }}>{req.title}</h3>
+                    <p className="text-sm mt-1.5" style={{ color: "#64708A" }}>{req.summary}</p>
+                    {Array.isArray(req.specifics) && req.specifics.length > 0 && (
+                      <ul className="mt-3 space-y-1.5">
+                        {req.specifics.map((s, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "#16202E" }}>
+                            <ChevronRight size={14} color="#B8863F" className="shrink-0 mt-0.5" />
+                            <span>{s}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {req.ecfr_url && (
+                      <a href={req.ecfr_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-mono mt-3" style={{ color: "#B8863F" }}>
+                        View official rule <ExternalLink size={11} />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1583,7 +1749,7 @@ function InstallBanner() {
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
-export default function ConnectShield({ initialCcn = null, clinicName = null, signOutAction }) {
+export default function ConnectShield({ initialCcn = null, clinicName = null, clinicId = null, signOutAction }) {
   const [tab, setTab] = useState("dashboard");
   const [analysisData, setAnalysisData] = useState(null);
   const [ssviData, setSsviData] = useState(null);
@@ -1707,7 +1873,7 @@ export default function ConnectShield({ initialCcn = null, clinicName = null, si
           )}
           {tab === "library" && <DocumentLibrary refreshTrigger={libRefresh} />}
           {tab === "chart" && <ChartReview />}
-          {tab === "reg" && <RegulatoryWatch />}
+          {tab === "reg" && <RegulatoryWatch clinicId={clinicId} />}
           {tab === "atlas" && <Atlas analysisData={analysisData} ssviData={ssviData} />}
         </div>
       </main>
