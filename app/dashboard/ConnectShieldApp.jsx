@@ -744,8 +744,212 @@ function SSVIBreakdownPanel({ ssviData, estimatedData }) {
   );
 }
 
+// ─── COMPLIANCE CARDS (persisted "latest of each type" from Supabase) ─────────
+// Reads clinic_report_cards for this clinic and renders one expandable card per
+// dashboard-worthy report type. Populated types show a summary + drill-down;
+// types with no data yet show a "No X on file" placeholder. This is persistent
+// per-clinic state (survives reload / any device), separate from the current
+// session's analysisData. SSVI is NOT here — it has its own panel below.
+const DASHBOARD_CARD_TYPES = [
+  { type: "cap",   label: "Medicare CAP & Beneficiary", icon: PieChart },
+  { type: "psr",   label: "PS&R Summary",               icon: Activity },
+  { type: "cahps", label: "CAHPS Survey",               icon: Target },
+  { type: "qapi",  label: "QAPI Program",               icon: ShieldCheck },
+];
+
+function fmtCardDate(iso) {
+  if (!iso) return "";
+  try { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
+  catch { return ""; }
+}
+
+function ComplianceCardsRow({ clinicId }) {
+  const [supabase] = useState(() => createClient());
+  const [cards, setCards] = useState({});     // { cap: {...analysis, _updatedAt}, ... }
+  const [loading, setLoading] = useState(true);
+  const [openType, setOpenType] = useState(null);
+
+  useEffect(() => {
+    if (!clinicId) { setLoading(false); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("clinic_report_cards")
+          .select("report_type, analysis, updated_at")
+          .eq("clinic_id", clinicId);
+        if (!cancelled && !error) {
+          const map = {};
+          (data || []).forEach((r) => { map[r.report_type] = { ...(r.analysis || {}), _updatedAt: r.updated_at }; });
+          setCards(map);
+        }
+      } catch (e) {
+        console.warn("[cards] load failed", e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [supabase, clinicId]);
+
+  // ── Per-type summary: headline value + status color for the collapsed card ──
+  const summaryFor = (type, a) => {
+    if (type === "cap") {
+      const cap = a.capData || {};
+      if (cap.capUtilizationPct != null) {
+        const pct = Number(cap.capUtilizationPct);
+        return { value: `${pct.toFixed(1)}%`, label: "CAP utilization", color: pct >= 100 ? "#D14343" : pct >= 85 ? "#C98A1F" : "#2E9E62" };
+      }
+      if (cap.capExposure != null) return { value: fmtD(cap.capExposure), label: "CAP exposure", color: cap.capExposure > 0 ? "#D14343" : "#2E9E62" };
+      return { value: "On file", label: "Beneficiary data saved", color: "#2E9E62" };
+    }
+    if (type === "psr") {
+      const s = a.overallComplianceScore;
+      if (s != null && s > 0) return { value: String(s), label: "Composite score", color: scoreColor(s) };
+      const rn = a.psrMetrics?.rnUnitsPerDay;
+      if (rn != null) return { value: `${rn} u/day`, label: "RN intensity", color: rn < 1.0 ? "#C98A1F" : "#2E9E62" };
+      return { value: "On file", label: "PS&R data saved", color: "#2E9E62" };
+    }
+    if (type === "cahps") {
+      if (a.cahpsOverallScore != null) return { value: `${a.cahpsOverallScore}%`, label: "CAHPS score", color: a.cahpsOverallScore < 75 ? "#C98A1F" : "#2E9E62" };
+      return { value: "On file", label: "CAHPS data saved", color: "#2E9E62" };
+    }
+    return { value: "—", label: "", color: "#64708A" };
+  };
+
+  // ── Per-type drill-down body ──
+  const detailFor = (type, a) => {
+    if (type === "cap") {
+      const cap = a.capData || {};
+      const metrics = [
+        { label: "Cap Year", value: cap.capYear || "—" },
+        { label: "Total Beneficiaries", value: cap.totalBeneficiaryCount != null ? Number(cap.totalBeneficiaryCount).toFixed(4) : "—" },
+        { label: "Per-Beneficiary Cap", value: fmtD(cap.perBeneficiaryCap) },
+        { label: "Aggregate Cap Limit", value: fmtD(cap.capLimit) },
+        { label: "Net Reimbursement", value: fmtD(cap.netReimbursement) },
+        { label: "CAP Exposure", value: fmtD(cap.capExposure), warn: cap.capExposure > 0 },
+      ];
+      return (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {metrics.map((m, i) => (
+            <div key={i} className="rounded-xl p-3" style={{ background: m.warn ? "#FEF3E2" : "#F5F6F8" }}>
+              <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>{m.label}</div>
+              <div className="text-base font-mono mt-1" style={{ color: m.warn ? "#C98A1F" : "#16202E" }}>{m.value}</div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    if (type === "psr") {
+      const psr = a.psrMetrics || {};
+      const metrics = [
+        { label: "Medicare Days", value: psr.totalMedicareDays != null ? fmt(psr.totalMedicareDays) : "—" },
+        { label: "Unduplicated Census", value: psr.totalUnduplicatedCensus != null ? fmt(psr.totalUnduplicatedCensus) : "—" },
+        { label: "Avg Length of Stay", value: psr.avgLengthOfStay != null ? `${psr.avgLengthOfStay} days` : "—", warn: psr.avgLengthOfStay > 180 },
+        { label: "RN Intensity", value: psr.rnUnitsPerDay != null ? `${psr.rnUnitsPerDay} u/day` : "—", warn: psr.rnUnitsPerDay < 1.0 },
+        { label: "Gross Reimbursement", value: fmtD(psr.grossReimbursement) },
+        { label: "Net Reimbursement", value: fmtD(psr.netReimbursement) },
+      ];
+      return (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {metrics.map((m, i) => (
+              <div key={i} className="rounded-xl p-3" style={{ background: m.warn ? "#FEF3E2" : "#F5F6F8" }}>
+                <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>{m.label}</div>
+                <div className="text-base font-mono mt-1" style={{ color: m.warn ? "#C98A1F" : "#16202E" }}>{m.value}</div>
+              </div>
+            ))}
+          </div>
+          {Array.isArray(a.categories) && a.categories.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {a.categories.map((c) => (
+                <span key={c.id} className="text-[11px] font-mono px-2 py-1 rounded"
+                  style={{ background: "#F5F6F8", color: scoreColor(c.score) }}>{c.label}: {c.score}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+    if (type === "cahps") {
+      return (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl p-3" style={{ background: "#F5F6F8" }}>
+            <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>Overall CAHPS Score</div>
+            <div className="text-base font-mono mt-1" style={{ color: "#16202E" }}>{a.cahpsOverallScore != null ? `${a.cahpsOverallScore}%` : "—"}</div>
+          </div>
+          <div className="rounded-xl p-3" style={{ background: "#F5F6F8" }}>
+            <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>National Average</div>
+            <div className="text-base font-mono mt-1" style={{ color: "#16202E" }}>{a.cahpsNationalAvg != null ? `${a.cahpsNationalAvg}%` : "—"}</div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  if (loading) {
+    return (
+      <div className="rounded-2xl p-6 flex items-center justify-center gap-3" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED" }}>
+        <Loader2 size={16} className="animate-spin" color="#B8863F" />
+        <span className="text-sm font-mono" style={{ color: "#64708A" }}>Loading compliance cards…</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs uppercase tracking-widest font-mono px-1" style={{ color: "#64708A" }}>Compliance Cards — Latest of Each Report</div>
+      {DASHBOARD_CARD_TYPES.map(({ type, label, icon: Icon }) => {
+        const a = cards[type];
+        const hasData = !!a;
+        const open = openType === type;
+        const sum = hasData ? summaryFor(type, a) : null;
+        return (
+          <div key={type} className="rounded-2xl overflow-hidden"
+            style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
+            <button
+              onClick={() => hasData && setOpenType(open ? null : type)}
+              className="w-full flex items-center gap-4 p-4 text-left"
+              style={{ cursor: hasData ? "pointer" : "default" }}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: hasData ? "#F7F0E1" : "#F5F6F8" }}>
+                <Icon size={18} color={hasData ? "#B8863F" : "#C7CDD8"} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span style={{ fontFamily: "Fraunces, serif", color: hasData ? "#16202E" : "#8992A3" }} className="text-base">{label}</span>
+                  {hasData && a._updatedAt && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "#F5F6F8", color: "#8992A3" }}>Updated {fmtCardDate(a._updatedAt)}</span>
+                  )}
+                </div>
+                {hasData ? (
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-lg font-mono" style={{ color: sum.color }}>{sum.value}</span>
+                    {sum.label && <span className="text-xs font-mono" style={{ color: "#64708A" }}>{sum.label}</span>}
+                  </div>
+                ) : (
+                  <div className="text-sm mt-0.5" style={{ color: "#8992A3" }}>
+                    No {label.split(" ")[0]} on file — upload a report to populate this card.
+                  </div>
+                )}
+              </div>
+              {hasData && (open ? <ChevronDown size={16} color="#64708A" /> : <ChevronRight size={16} color="#64708A" />)}
+            </button>
+            {hasData && open && (
+              <div className="px-4 pb-5 pt-1" style={{ borderTop: "1px solid #E3E7ED" }}>
+                <div className="mt-3">{detailFor(type, a)}</div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard({ analysisData, ssviData, hideLookup }) {
+function Dashboard({ analysisData, ssviData, hideLookup, clinicId }) {
   const [openId, setOpenId] = useState(null);
   const [ccnResult, setCcnResult] = useState(ssviData);
 
@@ -862,6 +1066,9 @@ function Dashboard({ analysisData, ssviData, hideLookup }) {
           )}
         </div>
       )}
+
+      {/* Compliance Cards — persisted latest-of-each-type from Supabase */}
+      <ComplianceCardsRow clinicId={clinicId} />
 
       {/* SSVI Full Breakdown */}
       <SSVIBreakdownPanel
@@ -2207,7 +2414,7 @@ export default function ConnectShield({ initialCcn = null, clinicName = null, cl
       <main className="flex-1 min-w-0 overflow-y-auto">
         <InstallBanner />
         <div className={`${CONTENT_MAX_W[tab] || "max-w-5xl"} mx-auto px-4 md:px-8 py-4 md:py-6 pb-28 md:pb-10`}>
-          {tab === "dashboard" && <Dashboard analysisData={analysisData} ssviData={ssviData} hideLookup={lockedCcn} />}
+          {tab === "dashboard" && <Dashboard analysisData={analysisData} ssviData={ssviData} hideLookup={lockedCcn} clinicId={clinicId} />}
           {tab === "upload" && (
             <UploadHub
               onAnalysisData={handleAnalysisData}
