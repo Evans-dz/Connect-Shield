@@ -112,7 +112,7 @@ function parseJSON(raw) {
 
 function safeDefault(overrides = {}) {
   return {
-    agencyName: "Unknown Agency", providerNumber: "", reportPeriod: "",
+    agencyName: "Unknown Agency", providerNumber: "", reportPeriod: "", reportPeriodEnd: "",
     reportsAnalyzed: [], overallComplianceScore: 0, overallRiskLevel: "medium",
     ssviScore: null, ssviUtilizationScore: null, ssviSpendingScore: 3.21,
     ssviIsEstimated: true, ssviFindings: [],
@@ -147,27 +147,32 @@ function sanitizeFileName(name) {
   return (name || "file").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "file";
 }
 
+// Validate a YYYY-MM-DD string; return it or null. Used to normalize the
+// report date the model extracts before we store/compare it.
+function normalizeISO(s) {
+  if (!s || typeof s !== "string") return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(s.trim()) ? s.trim() : null;
+}
+
 // Persist the "latest of each type" dashboard cards to Supabase.
 // KEY RULE: only upsert a card for a report type when THIS analysis actually
 // produced meaningful data for it. That way a PS&R-only upload never overwrites
 // an existing CAHPS or CAP card — each type updates independently, so the
 // dashboard always shows the most recent good data per type per clinic.
 // SSVI is intentionally NOT saved here — its card is fed by the real CCN lookup
-// (published CMS data), not the report's estimate. QAPI arrives in Stage C.
+// (published CMS data), not the report's estimate.
 async function saveReportCards({ supabase, clinicId, merged, sourceDocId = null }) {
   if (!supabase || !clinicId || !merged) return;
   const cats = merged.complianceCategories || [];
-  const cards = [];
+  const reportDate = normalizeISO(merged.reportPeriodEnd);   // date ON the document
+  const periodLabel = merged.reportPeriod || null;            // human-readable period
 
   // ── CAP / Beneficiary ──
   const cap = merged.capData || {};
   if (cap.capLimit != null || cap.netReimbursement != null || cap.totalBeneficiaryCount != null) {
-    cards.push({
-      report_type: "cap",
-      analysis: {
-        capData: cap,
-        category: cats.find((c) => c.id === "cap_exposure") || null,
-      },
+    await upsertReportCard({
+      supabase, clinicId, reportType: "cap", reportDate, reportPeriodLabel: periodLabel, sourceDocId,
+      analysis: { capData: cap, category: cats.find((c) => c.id === "cap_exposure") || null },
     });
   }
 
@@ -175,8 +180,8 @@ async function saveReportCards({ supabase, clinicId, merged, sourceDocId = null 
   const psr = merged.psrMetrics || {};
   const psrHasData = Object.values(psr).some((v) => v != null);
   if (psrHasData) {
-    cards.push({
-      report_type: "psr",
+    await upsertReportCard({
+      supabase, clinicId, reportType: "psr", reportDate, reportPeriodLabel: periodLabel, sourceDocId,
       analysis: {
         psrMetrics: psr,
         overallComplianceScore: merged.overallComplianceScore ?? null,
@@ -190,36 +195,45 @@ async function saveReportCards({ supabase, clinicId, merged, sourceDocId = null 
 
   // ── CAHPS is handled by the dedicated analyzeCAHPS() path (richer, with
   //    per-domain scores), not here. ──
-
-  for (const c of cards) {
-    const { error } = await supabase.from("clinic_report_cards").upsert(
-      {
-        clinic_id: clinicId,
-        report_type: c.report_type,
-        analysis: c.analysis,
-        source_doc_id: sourceDocId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "clinic_id,report_type" }
-    );
-    if (error) console.error("[report-cards] upsert error", c.report_type, error);
-    else console.log("[report-cards] upserted card:", c.report_type);
-  }
 }
 
-// Upsert a single report card (used by the dedicated QAPI + CAHPS analyzers).
-async function upsertReportCard({ supabase, clinicId, reportType, analysis, sourceDocId = null }) {
+// Upsert a single report card — the ONE path for all card writes.
+// DATE-AWARE: "latest of each type" is decided by the date ON the document, not
+// upload time. If a report with a newer report_date is already on file, an older
+// upload is skipped rather than clobbering it. Comparison only happens when both
+// dates are known; otherwise we fall back to last-write-wins.
+async function upsertReportCard({ supabase, clinicId, reportType, analysis, reportDate = null, reportPeriodLabel = null, sourceDocId = null }) {
   if (!supabase || !clinicId || !analysis) return { error: "missing args" };
-  return await supabase.from("clinic_report_cards").upsert(
+  try {
+    const { data: existing } = await supabase
+      .from("clinic_report_cards")
+      .select("report_date")
+      .eq("clinic_id", clinicId)
+      .eq("report_type", reportType)
+      .maybeSingle();
+    // ISO date strings compare correctly lexicographically.
+    if (existing && existing.report_date && reportDate && existing.report_date > reportDate) {
+      console.log(`[report-cards] kept newer ${reportType} on file (${existing.report_date} > ${reportDate}) — skipping older upload`);
+      return { skipped: true };
+    }
+  } catch (e) {
+    // If the pre-check fails for any reason, fall through to a normal upsert.
+  }
+  const { error } = await supabase.from("clinic_report_cards").upsert(
     {
       clinic_id: clinicId,
       report_type: reportType,
       analysis,
+      report_date: reportDate,
+      report_period_label: reportPeriodLabel,
       source_doc_id: sourceDocId,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "clinic_id,report_type" }
   );
+  if (error) console.error("[report-cards] upsert error", reportType, error);
+  else console.log("[report-cards] upserted card:", reportType, reportDate ? `(period end ${reportDate})` : "(no date)");
+  return { error };
 }
 
 // ── QAPI analysis (Stage C) ──────────────────────────────────────────────────
@@ -240,7 +254,7 @@ The 8 required components (assess each in this exact order):
 8. Patient Satisfaction / Perception of Care — satisfaction data collection and analysis
 
 Return ONLY valid JSON, no markdown, in exactly this shape:
-{"status":"complete","componentsDocumented":0,"componentsTotal":8,"activePipCount":0,"topGap":"one short sentence naming the most important missing or weak component, or empty string if none","components":[{"name":"Written QAPI Plan","present":true,"note":"brief note on what was found, or what's missing and the concrete action to take, under 25 words"}]}
+{"reportPeriod":"the plan year or effective date shown on the document, or empty string","reportDateISO":"YYYY-MM-DD for that period/date, or empty string","status":"complete","componentsDocumented":0,"componentsTotal":8,"activePipCount":0,"topGap":"one short sentence naming the most important missing or weak component, or empty string if none","components":[{"name":"Written QAPI Plan","present":true,"note":"brief note on what was found, or what's missing and the concrete action to take, under 25 words"}]}
 
 The components array MUST contain all 8 in the order above. Rules: base every judgment ONLY on the provided text — never invent. Mark present=false when a component isn't clearly addressed, and put the recommended action in note. status is "complete" for 8/8, "partial" when some are missing, "incomplete" when most are missing or the text is not really a QAPI program. componentsDocumented = count of present=true. Keep notes under 25 words, plain prose, no markdown.`;
   try {
@@ -269,7 +283,7 @@ Standard CAHPS Hospice measures to look for:
 - Willingness to Recommend
 
 Return ONLY valid JSON, no markdown, in exactly this shape:
-{"cahpsOverallScore":null,"cahpsNationalAvg":null,"weakestDomain":"name of the lowest-scoring domain, or empty string","domains":[{"name":"Communication with Family","score":null,"nationalAvg":null}]}
+{"reportPeriod":"the survey period shown on the document, or empty string","reportDateISO":"YYYY-MM-DD for the end of that survey period, or empty string","cahpsOverallScore":null,"cahpsNationalAvg":null,"weakestDomain":"name of the lowest-scoring domain, or empty string","domains":[{"name":"Communication with Family","score":null,"nationalAvg":null}]}
 
 Rules: use ACTUAL numbers from the text, expressed as percentages 0-100. If a value is not present, use null (never invent). Only include domains that actually appear in the document. Plain JSON only, no markdown.`;
   try {
@@ -479,9 +493,10 @@ OVERALL SCORE (0-100): Start 85. CAP exceeded→-20. CAP 85-100%→-10. RN<0.75�
 
 Return ONLY valid JSON starting with { ending with }. No markdown. Complete the entire JSON:
 
-{"agencyName":"string","providerNumber":"string","reportPeriod":"string","reportsAnalyzed":["list"],"overallComplianceScore":0,"overallRiskLevel":"medium","ssviScore":0,"ssviUtilizationScore":0,"ssviSpendingScore":3.21,"ssviIsEstimated":true,"ssviFindings":[{"measure":"string","detail":"string","status":"warn"}],"capData":{"capYear":"2026","totalBeneficiaryCount":null,"perBeneficiaryCap":34738.63,"capLimit":null,"netReimbursement":null,"capExposure":null,"capUtilizationPct":null},"psrMetrics":{"totalMedicareDays":null,"totalClaims":null,"totalUnduplicatedCensus":null,"avgLengthOfStay":null,"snVisitUnits":null,"rnUnitsPerDay":null,"netReimbursement":null,"grossReimbursement":null},"qualityMetrics":{"cahpsOverallScore":null,"cahpsNationalAvg":null,"pepperOutlierFlags":0,"qapiProjectCount":0,"surveyDeficiencyCount":0,"surveyConditionLevel":false,"openDeficiencies":0},"complianceCategories":[{"id":"rn_intensity","label":"RN Visit Intensity","score":0,"source":"PS&R 810","riskLevel":"medium","clawbackAmount":0,"summary":"string","factors":[{"weight":60,"label":"string","status":"warn","detail":"string"},{"weight":40,"label":"string","status":"warn","detail":"string"}],"actions":["string"]},{"id":"cap_exposure","label":"Medicare CAP Exposure","score":0,"source":"PS&R + Beneficiary Count","riskLevel":"high","clawbackAmount":0,"summary":"string","factors":[{"weight":70,"label":"string","status":"warn","detail":"string"},{"weight":30,"label":"string","status":"good","detail":"string"}],"actions":["string"]},{"id":"length_of_stay","label":"Length of Stay","score":0,"source":"PS&R 810","riskLevel":"low","clawbackAmount":0,"summary":"string","factors":[{"weight":60,"label":"string","status":"good","detail":"string"},{"weight":40,"label":"string","status":"good","detail":"string"}],"actions":["string"]},{"id":"billing_trend","label":"Billing Trend","score":0,"source":"PS&R 810","riskLevel":"low","clawbackAmount":0,"summary":"string","factors":[{"weight":50,"label":"string","status":"good","detail":"string"},{"weight":50,"label":"string","status":"good","detail":"string"}],"actions":["string"]}]}
+{"agencyName":"string","providerNumber":"string","reportPeriod":"string","reportPeriodEnd":"YYYY-MM-DD or empty string","reportsAnalyzed":["list"],"overallComplianceScore":0,"overallRiskLevel":"medium","ssviScore":0,"ssviUtilizationScore":0,"ssviSpendingScore":3.21,"ssviIsEstimated":true,"ssviFindings":[{"measure":"string","detail":"string","status":"warn"}],"capData":{"capYear":"2026","totalBeneficiaryCount":null,"perBeneficiaryCap":34738.63,"capLimit":null,"netReimbursement":null,"capExposure":null,"capUtilizationPct":null},"psrMetrics":{"totalMedicareDays":null,"totalClaims":null,"totalUnduplicatedCensus":null,"avgLengthOfStay":null,"snVisitUnits":null,"rnUnitsPerDay":null,"netReimbursement":null,"grossReimbursement":null},"qualityMetrics":{"cahpsOverallScore":null,"cahpsNationalAvg":null,"pepperOutlierFlags":0,"qapiProjectCount":0,"surveyDeficiencyCount":0,"surveyConditionLevel":false,"openDeficiencies":0},"complianceCategories":[{"id":"rn_intensity","label":"RN Visit Intensity","score":0,"source":"PS&R 810","riskLevel":"medium","clawbackAmount":0,"summary":"string","factors":[{"weight":60,"label":"string","status":"warn","detail":"string"},{"weight":40,"label":"string","status":"warn","detail":"string"}],"actions":["string"]},{"id":"cap_exposure","label":"Medicare CAP Exposure","score":0,"source":"PS&R + Beneficiary Count","riskLevel":"high","clawbackAmount":0,"summary":"string","factors":[{"weight":70,"label":"string","status":"warn","detail":"string"},{"weight":30,"label":"string","status":"good","detail":"string"}],"actions":["string"]},{"id":"length_of_stay","label":"Length of Stay","score":0,"source":"PS&R 810","riskLevel":"low","clawbackAmount":0,"summary":"string","factors":[{"weight":60,"label":"string","status":"good","detail":"string"},{"weight":40,"label":"string","status":"good","detail":"string"}],"actions":["string"]},{"id":"billing_trend","label":"Billing Trend","score":0,"source":"PS&R 810","riskLevel":"low","clawbackAmount":0,"summary":"string","factors":[{"weight":50,"label":"string","status":"good","detail":"string"},{"weight":50,"label":"string","status":"good","detail":"string"}],"actions":["string"]}]}
 
-Use ACTUAL numbers. Calculate precisely. Keep strings under 25 words.`;
+Use ACTUAL numbers. Calculate precisely. Keep strings under 25 words.
+reportPeriod = the human-readable reporting period exactly as shown on the report. reportPeriodEnd = the LAST day of that reporting period in YYYY-MM-DD (e.g. a federal fiscal year ending 09/30/2026 → "2026-09-30"; "10/01/25 to 09/30/26" → "2026-09-30"). Use empty string if the period is not stated.`;
 
 const SYSTEM_PROMPT_2 = `You are a Medicare hospice compliance expert. Generate 3 more compliance categories and 3 critical findings. Keep strings under 25 words. Return ONLY valid JSON:
 
@@ -840,11 +855,11 @@ function ComplianceCardsRow({ clinicId }) {
       try {
         const { data, error } = await supabase
           .from("clinic_report_cards")
-          .select("report_type, analysis, updated_at")
+          .select("report_type, analysis, updated_at, report_date, report_period_label")
           .eq("clinic_id", clinicId);
         if (!cancelled && !error) {
           const map = {};
-          (data || []).forEach((r) => { map[r.report_type] = { ...(r.analysis || {}), _updatedAt: r.updated_at }; });
+          (data || []).forEach((r) => { map[r.report_type] = { ...(r.analysis || {}), _updatedAt: r.updated_at, _reportDate: r.report_date, _periodLabel: r.report_period_label }; });
           setCards(map);
         }
       } catch (e) {
@@ -1038,6 +1053,9 @@ function ComplianceCardsRow({ clinicId }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span style={{ fontFamily: "Fraunces, serif", color: hasData ? "#16202E" : "#8992A3" }} className="text-base">{label}</span>
+                  {hasData && a._periodLabel && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "#F7F0E1", color: "#B8863F" }}>Period: {a._periodLabel}</span>
+                  )}
                   {hasData && a._updatedAt && (
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "#F5F6F8", color: "#8992A3" }}>Updated {fmtCardDate(a._updatedAt)}</span>
                   )}
@@ -1514,7 +1532,11 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
         if (cahpsEntry && clinicId) {
           const cahpsAnalysis = await analyzeCAHPS(cahpsEntry.text);
           if (cahpsAnalysis) {
-            const { error } = await upsertReportCard({ supabase, clinicId, reportType: "cahps", analysis: cahpsAnalysis });
+            const { error } = await upsertReportCard({
+              supabase, clinicId, reportType: "cahps", analysis: cahpsAnalysis,
+              reportDate: normalizeISO(cahpsAnalysis.reportDateISO),
+              reportPeriodLabel: cahpsAnalysis.reportPeriod || null,
+            });
             if (error) console.error("[cahps] card upsert error", error);
             else console.log("[cahps] rich card upserted");
           }
@@ -2491,7 +2513,11 @@ export default function ConnectShield({ initialCcn = null, clinicName = null, cl
       const analysis = await analyzeQAPI(text);
       if (!analysis) { console.warn("[qapi] analysis returned nothing"); return; }
       const supabase = createClient();
-      const { error } = await upsertReportCard({ supabase, clinicId, reportType: "qapi", analysis });
+      const { error } = await upsertReportCard({
+        supabase, clinicId, reportType: "qapi", analysis,
+        reportDate: normalizeISO(analysis.reportDateISO),
+        reportPeriodLabel: analysis.reportPeriod || null,
+      });
       if (error) console.error("[qapi] card upsert error", error);
       else console.log("[qapi] card upserted from library doc:", file?.name);
     } catch (e) {
