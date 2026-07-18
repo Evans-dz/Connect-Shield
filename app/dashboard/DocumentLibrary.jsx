@@ -60,7 +60,7 @@ function iconFor(mime, name) {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function DocumentLibrary({ clinicId, extractText }) {
+export default function DocumentLibrary({ clinicId, extractText, onDocumentSaved }) {
   const [supabase] = useState(() => createClient());
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -175,6 +175,12 @@ export default function DocumentLibrary({ clinicId, extractText }) {
             setError(`Could not save ${file.name}: ${rowErr.message}`);
           } else {
             console.log("[vault] row inserted ok for", file.name);
+            // Let the parent react (e.g. analyze a QAPI doc into a dashboard
+            // card). Fire-and-forget so it never slows the upload.
+            if (onDocumentSaved) {
+              try { onDocumentSaved(file, extractedText); }
+              catch (cbErr) { console.warn("[vault] onDocumentSaved failed", cbErr); }
+            }
           }
         }
       } catch (e) {
