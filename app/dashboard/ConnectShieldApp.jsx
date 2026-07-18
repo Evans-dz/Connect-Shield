@@ -188,18 +188,8 @@ async function saveReportCards({ supabase, clinicId, merged, sourceDocId = null 
     });
   }
 
-  // ── CAHPS ──
-  const q = merged.qualityMetrics || {};
-  if (q.cahpsOverallScore != null) {
-    cards.push({
-      report_type: "cahps",
-      analysis: {
-        cahpsOverallScore: q.cahpsOverallScore,
-        cahpsNationalAvg: q.cahpsNationalAvg ?? null,
-        category: cats.find((c) => c.id === "survey_readiness") || null,
-      },
-    });
-  }
+  // ── CAHPS is handled by the dedicated analyzeCAHPS() path (richer, with
+  //    per-domain scores), not here. ──
 
   for (const c of cards) {
     const { error } = await supabase.from("clinic_report_cards").upsert(
@@ -214,6 +204,80 @@ async function saveReportCards({ supabase, clinicId, merged, sourceDocId = null 
     );
     if (error) console.error("[report-cards] upsert error", c.report_type, error);
     else console.log("[report-cards] upserted card:", c.report_type);
+  }
+}
+
+// Upsert a single report card (used by the dedicated QAPI + CAHPS analyzers).
+async function upsertReportCard({ supabase, clinicId, reportType, analysis, sourceDocId = null }) {
+  if (!supabase || !clinicId || !analysis) return { error: "missing args" };
+  return await supabase.from("clinic_report_cards").upsert(
+    {
+      clinic_id: clinicId,
+      report_type: reportType,
+      analysis,
+      source_doc_id: sourceDocId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "clinic_id,report_type" }
+  );
+}
+
+// ── QAPI analysis (Stage C) ──────────────────────────────────────────────────
+// QAPI plans are hand-written and vary a lot per clinic, so this is flexible AI
+// extraction against the 8 CMS CoP 418.58 components rather than a rigid parser.
+// Returns null on parse failure so the caller simply skips the card (no crash).
+async function analyzeQAPI(text) {
+  const system = `You are a Medicare hospice QAPI compliance analyst for Connect Shield. You are given the text of a hospice's QAPI (Quality Assurance and Performance Improvement) program document. QAPI plans are hand-written and vary widely between agencies. Assess this document against the 8 required components under CMS Conditions of Participation 42 CFR 418.58.
+
+The 8 required components (assess each in this exact order):
+1. Written QAPI Plan — methodology, QI committee composition, governing body / executive responsibility
+2. Quality Indicator Data Collection — measurable data gathered across all care disciplines
+3. Adverse Event Tracking — hospitalizations, falls, unusual occurrences, with root cause analysis
+4. Infection Control Surveillance — infection tracking plan and annual risk analysis
+5. Incidents & Complaints Tracking — documentation of incidents and complaint resolution
+6. Medication Safety — "5 Rights" violations and adverse drug reaction tracking
+7. Active Performance Improvement Projects (PIPs) — with Plan-Do-Study-Act (PDSA) structure
+8. Patient Satisfaction / Perception of Care — satisfaction data collection and analysis
+
+Return ONLY valid JSON, no markdown, in exactly this shape:
+{"status":"complete","componentsDocumented":0,"componentsTotal":8,"activePipCount":0,"topGap":"one short sentence naming the most important missing or weak component, or empty string if none","components":[{"name":"Written QAPI Plan","present":true,"note":"brief note on what was found, or what's missing and the concrete action to take, under 25 words"}]}
+
+The components array MUST contain all 8 in the order above. Rules: base every judgment ONLY on the provided text — never invent. Mark present=false when a component isn't clearly addressed, and put the recommended action in note. status is "complete" for 8/8, "partial" when some are missing, "incomplete" when most are missing or the text is not really a QAPI program. componentsDocumented = count of present=true. Keep notes under 25 words, plain prose, no markdown.`;
+  try {
+    const raw = await callClaude(system, (text || "").slice(0, 12000), 2000);
+    return parseJSON(raw);
+  } catch (e) {
+    console.error("[qapi] analyze error", e);
+    return null;
+  }
+}
+
+// ── CAHPS analysis (Stage C) ─────────────────────────────────────────────────
+// Extracts the overall CAHPS Hospice score plus per-measure domain scores vs the
+// national average. Returns null on parse failure so the caller skips the card.
+async function analyzeCAHPS(text) {
+  const system = `You are a Medicare hospice CAHPS survey analyst for Connect Shield. You are given the text of a hospice's CAHPS Hospice Survey results. Extract the overall score and each measure/domain score, comparing to the national average wherever the document provides it.
+
+Standard CAHPS Hospice measures to look for:
+- Communication with Family
+- Getting Timely Care
+- Treating Patient with Respect
+- Emotional and Spiritual Support
+- Help for Pain and Symptoms
+- Training Family to Care for Patient
+- Rating of this Hospice
+- Willingness to Recommend
+
+Return ONLY valid JSON, no markdown, in exactly this shape:
+{"cahpsOverallScore":null,"cahpsNationalAvg":null,"weakestDomain":"name of the lowest-scoring domain, or empty string","domains":[{"name":"Communication with Family","score":null,"nationalAvg":null}]}
+
+Rules: use ACTUAL numbers from the text, expressed as percentages 0-100. If a value is not present, use null (never invent). Only include domains that actually appear in the document. Plain JSON only, no markdown.`;
+  try {
+    const raw = await callClaude(system, (text || "").slice(0, 12000), 2000);
+    return parseJSON(raw);
+  } catch (e) {
+    console.error("[cahps] analyze error", e);
+    return null;
   }
 }
 
@@ -814,6 +878,14 @@ function ComplianceCardsRow({ clinicId }) {
       if (a.cahpsOverallScore != null) return { value: `${a.cahpsOverallScore}%`, label: "CAHPS score", color: a.cahpsOverallScore < 75 ? "#C98A1F" : "#2E9E62" };
       return { value: "On file", label: "CAHPS data saved", color: "#2E9E62" };
     }
+    if (type === "qapi") {
+      if (a.componentsDocumented != null) {
+        const total = a.componentsTotal || 8;
+        const color = a.status === "complete" ? "#2E9E62" : a.status === "incomplete" ? "#D14343" : "#C98A1F";
+        return { value: `${a.componentsDocumented}/${total}`, label: "components documented", color };
+      }
+      return { value: "On file", label: "QAPI data saved", color: "#2E9E62" };
+    }
     return { value: "—", label: "", color: "#64708A" };
   };
 
@@ -872,16 +944,63 @@ function ComplianceCardsRow({ clinicId }) {
       );
     }
     if (type === "cahps") {
+      const domains = Array.isArray(a.domains) ? a.domains : [];
       return (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl p-3" style={{ background: "#F5F6F8" }}>
-            <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>Overall CAHPS Score</div>
-            <div className="text-base font-mono mt-1" style={{ color: "#16202E" }}>{a.cahpsOverallScore != null ? `${a.cahpsOverallScore}%` : "—"}</div>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl p-3" style={{ background: "#F5F6F8" }}>
+              <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>Overall CAHPS Score</div>
+              <div className="text-base font-mono mt-1" style={{ color: "#16202E" }}>{a.cahpsOverallScore != null ? `${a.cahpsOverallScore}%` : "—"}</div>
+            </div>
+            <div className="rounded-xl p-3" style={{ background: "#F5F6F8" }}>
+              <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>National Average</div>
+              <div className="text-base font-mono mt-1" style={{ color: "#16202E" }}>{a.cahpsNationalAvg != null ? `${a.cahpsNationalAvg}%` : "—"}</div>
+            </div>
           </div>
-          <div className="rounded-xl p-3" style={{ background: "#F5F6F8" }}>
-            <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>National Average</div>
-            <div className="text-base font-mono mt-1" style={{ color: "#16202E" }}>{a.cahpsNationalAvg != null ? `${a.cahpsNationalAvg}%` : "—"}</div>
-          </div>
+          {a.weakestDomain && (
+            <div className="text-sm rounded-lg px-3 py-2" style={{ background: "#FEF3E2", color: "#7A5700" }}>
+              Weakest area: {a.weakestDomain}
+            </div>
+          )}
+          {domains.length > 0 && (
+            <div className="space-y-1.5">
+              {domains.map((dm, i) => {
+                const below = dm.score != null && dm.nationalAvg != null && dm.score < dm.nationalAvg;
+                return (
+                  <div key={i} className="flex items-center justify-between rounded-lg px-3 py-2" style={{ background: "#F5F6F8" }}>
+                    <span className="text-sm" style={{ color: "#16202E" }}>{dm.name}</span>
+                    <span className="text-sm font-mono" style={{ color: below ? "#C98A1F" : "#2E9E62" }}>
+                      {dm.score != null ? `${dm.score}%` : "—"}{dm.nationalAvg != null ? ` · nat'l ${dm.nationalAvg}%` : ""}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+    if (type === "qapi") {
+      const comps = Array.isArray(a.components) ? a.components : [];
+      return (
+        <div className="space-y-2">
+          {a.activePipCount != null && (
+            <div className="text-xs font-mono" style={{ color: "#64708A" }}>Active PIPs: {a.activePipCount}</div>
+          )}
+          {a.topGap && (
+            <div className="text-sm rounded-lg px-3 py-2" style={{ background: "#FEF3E2", color: "#7A5700" }}>Top gap: {a.topGap}</div>
+          )}
+          {comps.map((c, i) => (
+            <div key={i} className="flex items-start gap-3 rounded-lg px-3 py-2" style={{ background: c.present ? "#EAF6EF" : "#FDECEA" }}>
+              {c.present
+                ? <CheckCircle2 size={15} color="#2E9E62" className="shrink-0 mt-0.5" />
+                : <AlertTriangle size={15} color="#D14343" className="shrink-0 mt-0.5" />}
+              <div className="min-w-0">
+                <div className="text-sm font-medium" style={{ color: "#16202E" }}>{c.name}</div>
+                {c.note && <div className="text-xs mt-0.5" style={{ color: "#64708A" }}>{c.note}</div>}
+              </div>
+            </div>
+          ))}
         </div>
       );
     }
@@ -1387,6 +1506,21 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
         if (clinicId) await saveReportCards({ supabase, clinicId, merged });
       } catch (cardErr) {
         console.error("[report-cards] save failed", cardErr);
+      }
+      // Dedicated CAHPS extraction → rich CAHPS card (only when a CAHPS report
+      // was actually in this upload). Non-destructive: skips silently otherwise.
+      try {
+        const cahpsEntry = Object.values(extractedTexts).find((v) => v.type === "cahps");
+        if (cahpsEntry && clinicId) {
+          const cahpsAnalysis = await analyzeCAHPS(cahpsEntry.text);
+          if (cahpsAnalysis) {
+            const { error } = await upsertReportCard({ supabase, clinicId, reportType: "cahps", analysis: cahpsAnalysis });
+            if (error) console.error("[cahps] card upsert error", error);
+            else console.log("[cahps] rich card upserted");
+          }
+        }
+      } catch (cahpsErr) {
+        console.error("[cahps] analysis failed", cahpsErr);
       }
       setFiles([]);
     } catch (e) {
@@ -2345,6 +2479,26 @@ export default function ConnectShield({ initialCcn = null, clinicName = null, cl
     setTab("dashboard");
   };
 
+  // Option A: when a document is saved to the Document Library, if it's a QAPI
+  // doc, analyze its text against the CoP checklist and upsert the QAPI card.
+  // Fire-and-forget from the vault's perspective; failures only log.
+  const handleLibraryDocSaved = useCallback(async (file, text) => {
+    if (!clinicId || !text) return;
+    try {
+      const type = detectReportType(file?.name || "", text);
+      if (type !== "qapi") return;
+      console.log("[qapi] QAPI document detected, analyzing:", file?.name);
+      const analysis = await analyzeQAPI(text);
+      if (!analysis) { console.warn("[qapi] analysis returned nothing"); return; }
+      const supabase = createClient();
+      const { error } = await upsertReportCard({ supabase, clinicId, reportType: "qapi", analysis });
+      if (error) console.error("[qapi] card upsert error", error);
+      else console.log("[qapi] card upserted from library doc:", file?.name);
+    } catch (e) {
+      console.error("[qapi] library analysis failed", e);
+    }
+  }, [clinicId]);
+
   const sidebarSsvi = resolveSSVI(ssviData);
   const lockedCcn = !!initialCcn;
 
@@ -2437,7 +2591,7 @@ export default function ConnectShield({ initialCcn = null, clinicName = null, cl
               clinicId={clinicId}
             />
           )}
-          {tab === "library" && <DocumentVault clinicId={clinicId} extractText={extractAnyFile} />}
+          {tab === "library" && <DocumentVault clinicId={clinicId} extractText={extractAnyFile} onDocumentSaved={handleLibraryDocSaved} />}
           {tab === "chart" && <ChartReview />}
           {tab === "reg" && <RegulatoryWatch clinicId={clinicId} />}
           {tab === "atlas" && <Atlas analysisData={analysisData} ssviData={ssviData} clinicId={clinicId} />}
