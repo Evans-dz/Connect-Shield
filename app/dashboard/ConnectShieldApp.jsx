@@ -9,7 +9,6 @@ import {
   Trash2, Eye, Search, Bot, Activity, Target, Zap, LogOut, ExternalLink,
 } from "lucide-react";
 import { createClient } from "@/lib/auth/client";
-import DocumentVault from "./DocumentLibrary";
 const FONT_IMPORT = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 `;
@@ -25,35 +24,6 @@ async function lookupCCN(ccn) {
     throw new Error(data.error || `Lookup failed: ${res.status}`);
   }
   return await res.json();
-}
-// ─── SUPABASE PLACEHOLDER ─────────────────────────────────────────────────────
-const SUPABASE_READY = false;
-const DEMO_ORG_ID = "demo_org_001";
-
-async function saveDocumentToLibrary(orgId, doc) {
-  if (!SUPABASE_READY) {
-    const key = `connectshield_docs_${orgId}`;
-    const existing = JSON.parse(localStorage.getItem(key) || "[]");
-    existing.unshift(doc);
-    localStorage.setItem(key, JSON.stringify(existing.slice(0, 100)));
-    return doc;
-  }
-}
-
-async function getDocumentLibrary(orgId) {
-  if (!SUPABASE_READY) {
-    const key = `connectshield_docs_${orgId}`;
-    return JSON.parse(localStorage.getItem(key) || "[]");
-  }
-}
-
-async function deleteDocumentFromLibrary(orgId, docId) {
-  if (!SUPABASE_READY) {
-    const key = `connectshield_docs_${orgId}`;
-    const existing = JSON.parse(localStorage.getItem(key) || "[]");
-    localStorage.setItem(key, JSON.stringify(existing.filter(d => d.id !== docId)));
-    return true;
-  }
 }
 
 // ─── CLAUDE API ───────────────────────────────────────────────────────────────
@@ -1524,6 +1494,315 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId }) {
   );
 }
 
+// ─── DOCUMENTS (unified upload + library) ─────────────────────────────────────
+// One any-file door: drop → review → Save & Analyze. Files are STORED IMMEDIATELY
+// (they appear in the list right away), then analysis runs in the BACKGROUND and
+// updates the dashboard cards as each finishes. Routing by detected type reuses the
+// already-proven analyzers: PS&R/Beneficiary → batch compliance analysis (CAP needs
+// both together) + cap/psr cards and the in-session scorecard; CAHPS → CAHPS card;
+// QAPI → QAPI card; PEPPER → PEPPER card; anything else is just stored. The document
+// list opens each file in a new tab (signed URL) and supports delete.
+function formatBytes(bytes) {
+  if (!bytes || bytes <= 0) return "0 B";
+  const u = ["B", "KB", "MB", "GB"];
+  const i = Math.min(u.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  const v = bytes / Math.pow(1024, i);
+  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${u[i]}`;
+}
+
+function DocumentsHub({ clinicId, onAnalysisData }) {
+  const [supabase] = useState(() => createClient());
+  const [pending, setPending] = useState([]);   // dropped, not yet saved
+  const [docs, setDocs] = useState([]);          // saved documents (library list)
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef(null);
+
+  const BUCKET = "clinic-docs";
+  const STORAGE_LIMIT = 1024 * 1024 * 1024; // 1 GB free tier
+  const totalBytes = docs.reduce((s, d) => s + (d.file_size || 0), 0);
+  const pctUsed = Math.min(100, (totalBytes / STORAGE_LIMIT) * 100);
+
+  const loadDocs = useCallback(async () => {
+    if (!clinicId) { setLoading(false); return; }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("clinic_documents").select("*")
+        .eq("clinic_id", clinicId).order("created_at", { ascending: false });
+      if (error) setError("Could not load documents: " + error.message);
+      else setDocs(data || []);
+    } catch (e) { setError("Could not load documents: " + (e?.message || String(e))); }
+    finally { setLoading(false); }
+  }, [supabase, clinicId]);
+
+  useEffect(() => { loadDocs(); }, [loadDocs]);
+
+  const addPending = (list) => {
+    const arr = Array.from(list || []);
+    setPending((prev) => {
+      const seen = new Set(prev.map((f) => f.name + f.size));
+      return [...prev, ...arr.filter((f) => !seen.has(f.name + f.size))];
+    });
+  };
+  const onDrop = (e) => { e.preventDefault(); setDragOver(false); if (!saving) addPending(e.dataTransfer.files); };
+  const removePending = (name, size) => setPending((prev) => prev.filter((f) => !(f.name === name && f.size === size)));
+
+  // Store everything first (immediate), refresh list, then analyze in background.
+  const saveAndAnalyze = async () => {
+    if (!pending.length || !clinicId) return;
+    setSaving(true); setError(""); setStatus("");
+    const stored = []; // { file, text, type }
+    try {
+      const { data: { user } = {} } = await supabase.auth.getUser();
+      if (!user) { setError("Not signed in. Please refresh and sign in again."); setSaving(false); return; }
+      for (const file of pending) {
+        setStatus(`Saving ${file.name}…`);
+        const _r = await extractAnyFile(file);
+        const text = _r.kind === "text" ? (_r.text || "") : "";
+        const type = detectReportType(file.name, text);
+        const path = `${clinicId}/${Date.now()}_${sanitizeFileName(file.name)}`;
+        const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false, contentType: file.type || undefined });
+        if (upErr) { console.error("[documents] storage error", upErr); setError(`Upload failed for ${file.name}: ${upErr.message}`); continue; }
+        const { error: rowErr } = await supabase.from("clinic_documents").insert({
+          clinic_id: clinicId, uploaded_by: user.id, file_name: file.name, storage_path: path,
+          file_size: file.size, mime_type: file.type || null,
+          extracted_text: text ? text.slice(0, 200000) : null, report_type: type, source: "documents",
+        });
+        if (rowErr) { console.error("[documents] row insert error", rowErr); await supabase.storage.from(BUCKET).remove([path]); continue; }
+        stored.push({ file, text, type });
+        console.log("[documents] saved:", file.name, `(${type})`);
+      }
+    } catch (e) {
+      console.error("[documents] save failed", e);
+      setError("Save error: " + (e?.message || String(e)));
+    } finally {
+      setSaving(false);
+      setPending([]);
+      loadDocs(); // files appear immediately
+    }
+    if (stored.length) runAnalysis(stored);
+  };
+
+  // Background routing. Compliance reports (PS&R/Beneficiary) analyze together as a
+  // batch because CAP exposure needs both. CAHPS/QAPI/PEPPER each have their own
+  // analyzer. Every step is guarded so one failure never blocks the others.
+  const runAnalysis = async (stored) => {
+    setAnalyzing(true);
+    setStatus("Reports saved. Analyzing in the background — your dashboard cards will update shortly.");
+    try {
+      const complianceFiles = stored.filter((s) => ["psr", "beneficiary"].includes(s.type));
+      if (complianceFiles.length) {
+        try {
+          const summaries = {};
+          complianceFiles.forEach(({ file, text, type }) => {
+            summaries[type] = (summaries[type] || "") + `\n\n=== ${file.name} ===\n${(text || "").substring(0, 2500)}`;
+          });
+          const reportsFound = Object.keys(summaries);
+          const combined = Object.entries(summaries).map(([t, txt]) => `\n\n====== ${t.toUpperCase()} REPORT ======\n${txt}`).join("\n").substring(0, 6000);
+          const header = `REPORTS: ${reportsFound.join(", ")}\n\n`;
+          const part1 = await callClaudeWithRetry(SYSTEM_PROMPT_1, header + combined, 4000, 3);
+          const context2 = `AGENCY: ${part1.agencyName}\nSCORE: ${part1.overallComplianceScore}\nRN: ${part1.psrMetrics?.rnUnitsPerDay}\nCAP: ${fmtD(part1.capData?.capExposure)}\nSSVI: ${part1.ssviScore}/16\n\n${header}${combined}`;
+          const part2 = await callClaudeWithRetry(SYSTEM_PROMPT_2, context2, 3000, 3);
+          const seen = new Set();
+          const cats = [...(part1.complianceCategories || []), ...(part2.complianceCategories || [])].filter((c) => c && c.id && !seen.has(c.id) && seen.add(c.id));
+          const merged = {
+            ...part1,
+            reportsAnalyzed: reportsFound.map(getReportTypeLabel),
+            complianceCategories: cats,
+            criticalFindings: part2.criticalFindings || [],
+          };
+          await saveReportCards({ supabase, clinicId, merged });
+          if (onAnalysisData) onAnalysisData(merged); // updates the in-session scorecard/tiles
+        } catch (e) { console.error("[documents] compliance analysis failed", e); }
+      }
+
+      const cahps = stored.find((s) => s.type === "cahps");
+      if (cahps) {
+        try {
+          const a = await analyzeCAHPS(cahps.text);
+          if (a) await upsertReportCard({ supabase, clinicId, reportType: "cahps", analysis: a, reportDate: bestReportDate(a.reportDateISO, a.reportPeriod), reportPeriodLabel: a.reportPeriod || null });
+        } catch (e) { console.error("[documents] cahps failed", e); }
+      }
+      for (const q of stored.filter((s) => s.type === "qapi")) {
+        try {
+          const a = await analyzeQAPI(q.text);
+          if (a) await upsertReportCard({ supabase, clinicId, reportType: "qapi", analysis: a, reportDate: bestReportDate(a.reportDateISO, a.reportPeriod), reportPeriodLabel: a.reportPeriod || null });
+        } catch (e) { console.error("[documents] qapi failed", e); }
+      }
+      for (const p of stored.filter((s) => s.type === "pepper")) {
+        try {
+          const a = await analyzePEPPER(p.text);
+          if (a) await upsertReportCard({ supabase, clinicId, reportType: "pepper", analysis: a, reportDate: bestReportDate(a.reportDateISO, a.reportPeriod), reportPeriodLabel: a.reportPeriod || null });
+        } catch (e) { console.error("[documents] pepper failed", e); }
+      }
+      setStatus("Analysis complete — check your dashboard cards.");
+    } catch (e) {
+      console.error("[documents] analysis error", e);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const viewDoc = async (doc) => {
+    setError("");
+    try {
+      const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(doc.storage_path, 60);
+      if (error || !data?.signedUrl) { setError(`Could not open ${doc.file_name}`); return; }
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (e) { setError(`Could not open ${doc.file_name}`); }
+  };
+  const removeDoc = async (doc) => {
+    if (!window.confirm(`Delete "${doc.file_name}"? This cannot be undone.`)) return;
+    setError("");
+    try {
+      await supabase.storage.from(BUCKET).remove([doc.storage_path]);
+      await supabase.from("clinic_documents").delete().eq("id", doc.id);
+    } catch (e) { setError(`Could not delete ${doc.file_name}`); }
+    finally { loadDocs(); }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <div style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-2xl">Documents</div>
+          <p className="text-sm mt-1" style={{ color: "#64708A" }}>
+            Upload any report or file. We store it securely, and reports (PS&amp;R, Beneficiary, CAHPS, QAPI, PEPPER) are auto-analyzed into your dashboard cards.
+          </p>
+        </div>
+        <div className="min-w-[200px]">
+          <div className="flex items-center gap-1.5 text-xs font-mono mb-1.5" style={{ color: "#64708A" }}>
+            <Files size={13} /> {formatBytes(totalBytes)} of 1 GB used
+          </div>
+          <div className="w-full rounded-full h-1.5" style={{ background: "#E3E7ED" }}>
+            <div className="h-1.5 rounded-full" style={{ width: `${pctUsed}%`, background: pctUsed > 90 ? "#D14343" : "#14315C" }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Drop zone */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+        onClick={() => !saving && inputRef.current?.click()}
+        className="rounded-2xl p-8 flex flex-col items-center justify-center gap-3 text-center cursor-pointer transition-all"
+        style={{ background: dragOver ? "#F7F0E1" : "#FFFFFF", border: `2px dashed ${dragOver ? "#B8863F" : "#C7CDD8"}` }}>
+        <input ref={inputRef} type="file" multiple className="hidden" onChange={(e) => { addPending(e.target.files); e.target.value = ""; }} />
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: "#F7F0E1" }}>
+          <Upload size={24} color="#B8863F" />
+        </div>
+        <div>
+          <div style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-lg">Drop files here or click to upload</div>
+          <div className="text-sm mt-1" style={{ color: "#64708A" }}>Any file type · PS&amp;R · Beneficiary · PEPPER · CAHPS · QAPI · policies · anything</div>
+          <div className="text-xs mt-1.5 font-mono" style={{ color: "#8992A3" }}>You'll review before anything is saved</div>
+        </div>
+      </div>
+
+      {/* Review list (pending) */}
+      {pending.length > 0 && (
+        <div className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
+          <div className="flex items-center justify-between mb-3">
+            <div style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-base">
+              {pending.length} file{pending.length > 1 ? "s" : ""} ready — review, then save
+            </div>
+            <button onClick={() => setPending([])} className="text-xs font-mono underline" style={{ color: "#64708A" }}>Clear all</button>
+          </div>
+          <div className="space-y-2 mb-4">
+            {pending.map((f) => {
+              const t = REPORT_TYPES.find((r) => r.id === detectReportType(f.name, ""));
+              return (
+                <div key={f.name + f.size} className="flex items-center gap-3 p-2.5 rounded-xl" style={{ background: "#F5F6F8" }}>
+                  <FileText size={14} color="#B8863F" className="shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm truncate" style={{ color: "#16202E" }}>{f.name}</div>
+                    <div className="text-[11px] font-mono" style={{ color: "#64708A" }}>{t?.label || "Auto-detecting"} · {(f.size / 1024).toFixed(0)} KB</div>
+                  </div>
+                  <button onClick={() => removePending(f.name, f.size)}><X size={13} color="#8992A3" /></button>
+                </div>
+              );
+            })}
+          </div>
+          {saving ? (
+            <div className="rounded-xl p-4 flex items-center gap-3" style={{ background: "#FBF3E4", border: "1px solid #EAD3A3" }}>
+              <Loader2 size={16} color="#B8863F" className="animate-spin shrink-0" />
+              <div className="text-sm font-medium" style={{ color: "#B8863F" }}>{status || "Saving…"}</div>
+            </div>
+          ) : (
+            <button onClick={saveAndAnalyze}
+              className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium"
+              style={{ background: "#14213D", color: "#F3F5F8" }}>
+              <Sparkles size={15} />
+              Save &amp; Analyze {pending.length} file{pending.length > 1 ? "s" : ""}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Status / errors */}
+      {error && (
+        <div className="rounded-xl p-3 flex items-start gap-2" style={{ background: "#FDECEA", border: "1px solid #F3B8AC" }}>
+          <AlertCircle size={15} color="#D14343" className="shrink-0 mt-0.5" />
+          <span className="text-sm flex-1" style={{ color: "#B23A2E" }}>{error}</span>
+          <button onClick={() => setError("")}><X size={13} color="#B23A2E" /></button>
+        </div>
+      )}
+      {!error && status && !saving && (
+        <div className="rounded-xl p-3 flex items-center gap-3" style={{ background: analyzing ? "#FBF3E4" : "#EAF6EF", border: `1px solid ${analyzing ? "#EAD3A3" : "#A8DFC0"}` }}>
+          {analyzing ? <Loader2 size={15} color="#B8863F" className="animate-spin shrink-0" /> : <CheckCircle2 size={15} color="#2E9E62" className="shrink-0" />}
+          <span className="text-sm" style={{ color: analyzing ? "#7A5700" : "#1A6E41" }}>{status}</span>
+        </div>
+      )}
+
+      {/* Document list */}
+      <div>
+        <div className="text-xs uppercase tracking-widest font-mono px-1 mb-2" style={{ color: "#64708A" }}>Your Documents</div>
+        {loading ? (
+          <div className="rounded-2xl p-8 flex items-center justify-center gap-3" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED" }}>
+            <Loader2 size={16} className="animate-spin" color="#B8863F" />
+            <span className="text-sm font-mono" style={{ color: "#64708A" }}>Loading…</span>
+          </div>
+        ) : docs.length === 0 ? (
+          <div className="rounded-2xl p-12 flex flex-col items-center justify-center gap-2 text-center" style={{ background: "#FFFFFF", border: "2px dashed #C7CDD8" }}>
+            <Library size={30} color="#C7CDD8" />
+            <div style={{ fontFamily: "Fraunces, serif", color: "#8992A3" }} className="text-lg">No documents yet</div>
+            <p className="text-sm" style={{ color: "#8992A3" }}>Upload your first report to get started.</p>
+          </div>
+        ) : (
+          <div className="rounded-2xl overflow-hidden" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
+            {docs.map((doc, idx) => (
+              <div key={doc.id} className="flex items-center gap-3 p-4" style={{ borderTop: idx === 0 ? "none" : "1px solid #E3E7ED" }}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#F5F6F8" }}>
+                  <FileText size={16} color="#B8863F" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate" style={{ color: "#16202E" }} title={doc.file_name}>{doc.file_name}</div>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {doc.report_type && <span className="text-[11px] font-mono px-2 py-0.5 rounded" style={{ background: "#F5F6F8", color: "#64708A" }}>{getReportTypeLabel(doc.report_type)}</span>}
+                    <span className="text-[11px] font-mono" style={{ color: "#8992A3" }}>{formatBytes(doc.file_size)}</span>
+                    <span className="text-[11px] font-mono" style={{ color: "#8992A3" }}>{doc.created_at ? new Date(doc.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}</span>
+                  </div>
+                </div>
+                <button onClick={() => viewDoc(doc)} title="Open in new tab" className="p-1.5 rounded-lg" style={{ background: "#F5F6F8" }}>
+                  <ExternalLink size={14} color="#14315C" />
+                </button>
+                <button onClick={() => removeDoc(doc)} title="Delete" className="p-1.5 rounded-lg" style={{ background: "#F5F6F8" }}>
+                  <Trash2 size={14} color="#D14343" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── UPLOAD HUB ───────────────────────────────────────────────────────────────
 // Report Upload accepts PDFs only.
 function isReportFile(f) {
@@ -1796,94 +2075,6 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
           <div>SSVI public scores = <strong style={{ color: "#B8863F" }}>cms.gov/medicare/quality/hospice</strong> → download provider-level SSVI data file</div>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ─── DOCUMENT LIBRARY (legacy local store — kept for Atlas context only) ──────
-function DocumentLibrary({ refreshTrigger }) {
-  const [docs, setDocs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [viewDoc, setViewDoc] = useState(null);
-
-  const loadDocs = async () => {
-    setLoading(true);
-    const data = await getDocumentLibrary(DEMO_ORG_ID);
-    setDocs(data || []);
-    setLoading(false);
-  };
-
-  useEffect(() => { loadDocs(); }, [refreshTrigger]);
-
-  const handleDelete = async (docId) => {
-    await deleteDocumentFromLibrary(DEMO_ORG_ID, docId);
-    loadDocs();
-  };
-
-  const typeColor = (type) => REPORT_TYPES.find(r => r.id === type)?.color || "#64708A";
-
-  return (
-    <div className="space-y-5">
-      <div>
-        <div style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-2xl">Document Library</div>
-        <p className="text-sm mt-1" style={{ color: "#64708A" }}>
-          All uploaded reports stored per clinic. Atlas reads these to answer your compliance questions.
-          {!SUPABASE_READY && <span className="ml-1 font-mono" style={{ color: "#C98A1F" }}>(Session storage — connect Supabase auth for permanent multi-tenant storage)</span>}
-        </p>
-      </div>
-      {loading ? (
-        <div className="flex items-center gap-3 p-8 justify-center">
-          <Loader2 size={20} className="animate-spin" color="#B8863F" />
-          <span className="text-sm font-mono" style={{ color: "#64708A" }}>Loading…</span>
-        </div>
-      ) : docs.length === 0 ? (
-        <div className="rounded-2xl p-12 flex flex-col items-center justify-center gap-3 text-center"
-          style={{ background: "#FFFFFF", border: "2px dashed #C7CDD8" }}>
-          <Library size={32} color="#C7CDD8" />
-          <div style={{ fontFamily: "Fraunces, serif", color: "#8992A3" }} className="text-xl">No documents yet</div>
-          <p className="text-sm" style={{ color: "#8992A3" }}>Upload reports in Report Upload — they appear here automatically.</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <div className="text-sm font-mono" style={{ color: "#64708A" }}>{docs.length} document{docs.length > 1 ? "s" : ""} · Org: {DEMO_ORG_ID}</div>
-          {docs.map(doc => (
-            <div key={doc.id} className="rounded-2xl p-4 flex items-start gap-3"
-              style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: typeColor(doc.reportType) + "15" }}>
-                <FileText size={16} style={{ color: typeColor(doc.reportType) }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate" style={{ color: "#16202E" }}>{doc.filename}</div>
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <span className="text-[11px] font-mono px-2 py-0.5 rounded"
-                    style={{ background: typeColor(doc.reportType) + "15", color: typeColor(doc.reportType) }}>{doc.reportTypeLabel}</span>
-                  <span className="text-[11px] font-mono" style={{ color: "#8992A3" }}>{(doc.fileSize / 1024).toFixed(0)} KB</span>
-                  <span className="text-[11px] font-mono" style={{ color: "#8992A3" }}>
-                    {new Date(doc.uploadedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                  </span>
-                </div>
-                {viewDoc === doc.id && doc.textPreview && (
-                  <div className="mt-2 p-2.5 rounded-lg text-xs font-mono"
-                    style={{ background: "#F5F6F8", color: "#64708A", whiteSpace: "pre-wrap", maxHeight: 160, overflow: "auto" }}>
-                    {doc.textPreview}…
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button onClick={() => setViewDoc(viewDoc === doc.id ? null : doc.id)}
-                  className="p-1.5 rounded-lg" style={{ background: "#F5F6F8" }}>
-                  <Eye size={13} color="#64708A" />
-                </button>
-                <button onClick={() => handleDelete(doc.id)}
-                  className="p-1.5 rounded-lg" style={{ background: "#F5F6F8" }}>
-                  <Trash2 size={13} color="#D14343" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -2534,15 +2725,14 @@ function RecertificationTracker({ patients = [] }) {
 // ─── NAV & SHELL ──────────────────────────────────────────────────────────────
 const TABS = [
   { id: "dashboard", label: "Dashboard", icon: Home },
-  { id: "upload", label: "Report Upload", icon: Upload },
-  { id: "library", label: "Document Library", icon: Library },
+  { id: "documents", label: "Documents", icon: Library },
   { id: "chart", label: "Chart Review", icon: FileText },
   { id: "reg", label: "Regulatory Watch", icon: BookOpen },
   { id: "atlas", label: "Atlas", icon: Bot },
 ];
 
 const CONTENT_MAX_W = {
-  dashboard: "max-w-5xl", upload: "max-w-4xl", library: "max-w-4xl",
+  dashboard: "max-w-5xl", documents: "max-w-4xl",
   chart: "max-w-4xl", reg: "max-w-4xl", atlas: "max-w-2xl",
 };
 
@@ -2613,31 +2803,6 @@ export default function ConnectShield({ initialCcn = null, clinicName = null, cl
     setSsviData(data);
     setTab("dashboard");
   };
-
-  // Option A: when a document is saved to the Document Library, route it to the
-  // right analyzer by detected type (QAPI plan → QAPI card, PEPPER report → PEPPER
-  // card) and upsert that dashboard card. Fire-and-forget; failures only log.
-  const handleLibraryDocSaved = useCallback(async (file, text) => {
-    if (!clinicId || !text) return;
-    try {
-      const type = detectReportType(file?.name || "", text);
-      let reportType = null, analysis = null;
-      if (type === "qapi") { reportType = "qapi"; console.log("[qapi] QAPI document detected, analyzing:", file?.name); analysis = await analyzeQAPI(text); }
-      else if (type === "pepper") { reportType = "pepper"; console.log("[pepper] PEPPER document detected, analyzing:", file?.name); analysis = await analyzePEPPER(text); }
-      else return; // other types are just stored, no card
-      if (!analysis) { console.warn(`[${reportType}] analysis returned nothing`); return; }
-      const supabase = createClient();
-      const { error } = await upsertReportCard({
-        supabase, clinicId, reportType, analysis,
-        reportDate: bestReportDate(analysis.reportDateISO, analysis.reportPeriod),
-        reportPeriodLabel: analysis.reportPeriod || null,
-      });
-      if (error) console.error(`[${reportType}] card upsert error`, error);
-      else console.log(`[${reportType}] card upserted from library doc:`, file?.name);
-    } catch (e) {
-      console.error("[library] analysis failed", e);
-    }
-  }, [clinicId]);
 
   const sidebarSsvi = resolveSSVI(ssviData);
   const lockedCcn = !!initialCcn;
@@ -2721,17 +2886,7 @@ export default function ConnectShield({ initialCcn = null, clinicName = null, cl
         <InstallBanner />
         <div className={`${CONTENT_MAX_W[tab] || "max-w-5xl"} mx-auto px-4 md:px-8 py-4 md:py-6 pb-28 md:pb-10`}>
           {tab === "dashboard" && <Dashboard analysisData={analysisData} ssviData={ssviData} hideLookup={lockedCcn} clinicId={clinicId} />}
-          {tab === "upload" && (
-            <UploadHub
-              onAnalysisData={handleAnalysisData}
-              hasData={!!analysisData}
-              onDocsUpdated={() => setLibRefresh(n => n + 1)}
-              onSSVIData={handleSsviData}
-              hideLookup={lockedCcn}
-              clinicId={clinicId}
-            />
-          )}
-          {tab === "library" && <DocumentVault clinicId={clinicId} extractText={extractAnyFile} onDocumentSaved={handleLibraryDocSaved} />}
+          {tab === "documents" && <DocumentsHub clinicId={clinicId} onAnalysisData={setAnalysisData} />}
           {tab === "chart" && <ChartReview />}
           {tab === "reg" && <RegulatoryWatch clinicId={clinicId} />}
           {tab === "atlas" && <Atlas analysisData={analysisData} ssviData={ssviData} clinicId={clinicId} />}
