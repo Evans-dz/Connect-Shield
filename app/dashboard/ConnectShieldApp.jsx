@@ -154,6 +154,54 @@ function normalizeISO(s) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s.trim()) ? s.trim() : null;
 }
 
+// Fallback: derive the reporting-period END date (YYYY-MM-DD) from a human
+// period string like "10/01/25 to 09/30/26", "FY2025", "October 2025 – Sept 2026".
+// Strategy: collect every date-like token and take the LATEST one — for a period
+// range that's always the end date. Falls back to fiscal/calendar year end, then
+// null. This is the belt to the model's suspenders so the date is accurate even
+// when the model doesn't emit a normalized ISO date.
+function deriveReportDate(periodStr) {
+  if (!periodStr || typeof periodStr !== "string") return null;
+  const s = periodStr.trim();
+  const cands = [];
+  const push = (y, mo, d) => { const dt = new Date(Date.UTC(y, mo, d)); if (!isNaN(dt.getTime())) cands.push(dt); };
+
+  // MM/DD/YY or MM/DD/YYYY
+  let m; const mdy = /\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/g;
+  while ((m = mdy.exec(s)) !== null) {
+    let y = parseInt(m[3], 10);
+    if (m[3].length === 2) y += y >= 70 ? 1900 : 2000;
+    push(y, parseInt(m[1], 10) - 1, parseInt(m[2], 10));
+  }
+  // ISO YYYY-MM-DD
+  const iso = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
+  while ((m = iso.exec(s)) !== null) push(+m[1], +m[2] - 1, +m[3]);
+  // Month name + year → last day of that month
+  const MONTHS = { january:0,february:1,march:2,april:3,may:4,june:5,july:6,august:7,september:8,october:9,november:10,december:11,
+                   jan:0,feb:1,mar:2,apr:3,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11 };
+  const mon = /\b([A-Za-z]{3,9})\.?\s+(\d{4})\b/g;
+  while ((m = mon.exec(s)) !== null) {
+    const mo = MONTHS[m[1].toLowerCase()];
+    if (mo != null) push(+m[2], mo, new Date(Date.UTC(+m[2], mo + 1, 0)).getUTCDate());
+  }
+  if (cands.length) {
+    return new Date(Math.max(...cands.map((d) => d.getTime()))).toISOString().slice(0, 10);
+  }
+  // FY2025 / FY '25 → federal fiscal year end 09/30
+  const fy = s.match(/\bFY\s*'?(\d{2,4})\b/i);
+  if (fy) { let y = parseInt(fy[1], 10); if (fy[1].length === 2) y += y >= 70 ? 1900 : 2000; return `${y}-09-30`; }
+  // Bare calendar year → year end
+  const yr = s.match(/\b(20\d{2})\b/);
+  if (yr) return `${yr[1]}-12-31`;
+  return null;
+}
+
+// Best available report date: trust the model's normalized ISO first, else parse
+// it out of the human-readable period string.
+function bestReportDate(iso, periodLabel) {
+  return normalizeISO(iso) || deriveReportDate(periodLabel);
+}
+
 // Persist the "latest of each type" dashboard cards to Supabase.
 // KEY RULE: only upsert a card for a report type when THIS analysis actually
 // produced meaningful data for it. That way a PS&R-only upload never overwrites
@@ -164,7 +212,7 @@ function normalizeISO(s) {
 async function saveReportCards({ supabase, clinicId, merged, sourceDocId = null }) {
   if (!supabase || !clinicId || !merged) return;
   const cats = merged.complianceCategories || [];
-  const reportDate = normalizeISO(merged.reportPeriodEnd);   // date ON the document
+  const reportDate = bestReportDate(merged.reportPeriodEnd, merged.reportPeriod);   // date ON the document
   const periodLabel = merged.reportPeriod || null;            // human-readable period
 
   // ── CAP / Beneficiary ──
@@ -1511,10 +1559,15 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
       setProgress("Generating findings — Part 2 of 2…");
       const context2 = `AGENCY: ${part1.agencyName}\nSCORE: ${part1.overallComplianceScore}\nRN: ${part1.psrMetrics?.rnUnitsPerDay}\nCAP: ${fmtD(part1.capData?.capExposure)}\nSSVI: ${part1.ssviScore}/16\n\n${header}${combinedText}`;
       const part2 = await callClaudeWithRetry(SYSTEM_PROMPT_2, context2, 3000, 3);
+      // De-dupe categories by id — the two-part analysis (or LLM variance) can
+      // occasionally emit the same category twice, which showed as duplicate tiles.
+      const _seenCat = new Set();
+      const _dedupedCats = [...(part1.complianceCategories || []), ...(part2.complianceCategories || [])]
+        .filter((c) => c && c.id && !_seenCat.has(c.id) && _seenCat.add(c.id));
       const merged = {
         ...part1,
         reportsAnalyzed: reportsFound.map(getReportTypeLabel),
-        complianceCategories: [...(part1.complianceCategories || []), ...(part2.complianceCategories || [])],
+        complianceCategories: _dedupedCats,
         criticalFindings: part2.criticalFindings || [],
       };
       onAnalysisData(merged);
@@ -1534,7 +1587,7 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
           if (cahpsAnalysis) {
             const { error } = await upsertReportCard({
               supabase, clinicId, reportType: "cahps", analysis: cahpsAnalysis,
-              reportDate: normalizeISO(cahpsAnalysis.reportDateISO),
+              reportDate: bestReportDate(cahpsAnalysis.reportDateISO, cahpsAnalysis.reportPeriod),
               reportPeriodLabel: cahpsAnalysis.reportPeriod || null,
             });
             if (error) console.error("[cahps] card upsert error", error);
@@ -2515,7 +2568,7 @@ export default function ConnectShield({ initialCcn = null, clinicName = null, cl
       const supabase = createClient();
       const { error } = await upsertReportCard({
         supabase, clinicId, reportType: "qapi", analysis,
-        reportDate: normalizeISO(analysis.reportDateISO),
+        reportDate: bestReportDate(analysis.reportDateISO, analysis.reportPeriod),
         reportPeriodLabel: analysis.reportPeriod || null,
       });
       if (error) console.error("[qapi] card upsert error", error);
