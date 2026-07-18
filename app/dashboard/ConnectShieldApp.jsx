@@ -2198,28 +2198,40 @@ Formatting: Write in clean, plain prose using complete sentences and short parag
 }
 
 // ─── RECERT TRACKER ───────────────────────────────────────────────────────────
-const MOCK_PATIENTS = [
-  { name: "James MacIntyre", day: 174, totalDays: 180, ftfComplete: false, diagnosis: "End-stage COPD" },
-  { name: "Eleanor Vasquez", day: 162, totalDays: 180, ftfComplete: true, diagnosis: "CHF, Stage IV" },
-  { name: "Robert Chung", day: 171, totalDays: 180, ftfComplete: false, diagnosis: "Dementia, FAST 7C" },
-];
+// FTF (Face-to-Face) recertification tracking is per-PATIENT, real-time data that
+// lives in the clinic's EHR — it does NOT come from any CMS report we ingest.
+// This component is DORMANT until a real per-clinic patient source is wired in
+// (an EHR integration or a manual-entry flow). It renders nothing when it has no
+// data, so no fabricated patients ever appear on a live clinic dashboard. To light
+// it up, pass a real `patients` array. Expected shape (kept for reference):
+//   { name, diagnosis, day, totalDays, ftfComplete }
+// const MOCK_PATIENTS = [
+//   { name: "James MacIntyre", day: 174, totalDays: 180, ftfComplete: false, diagnosis: "End-stage COPD" },
+//   { name: "Eleanor Vasquez", day: 162, totalDays: 180, ftfComplete: true,  diagnosis: "CHF, Stage IV" },
+//   { name: "Robert Chung",    day: 171, totalDays: 180, ftfComplete: false, diagnosis: "Dementia, FAST 7C" },
+// ];
 
-function RecertificationTracker() {
+function RecertificationTracker({ patients = [] }) {
   const [open, setOpen] = useState(false);
+  // Dormant until real per-clinic patient data exists — never render mock data.
+  if (!patients || patients.length === 0) return null;
+  const missingFtf = patients.filter((p) => p.day >= 170 && !p.ftfComplete).length;
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
       <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between p-5 text-left">
         <div className="flex items-center gap-2">
           <Calendar size={15} color="#B8863F" />
           <span style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-base">Recertification Windows &amp; FTF Tracking</span>
-          <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: "#FDECEA", color: "#D14343" }}>2 Missing FTF</span>
+          {missingFtf > 0 && (
+            <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: "#FDECEA", color: "#D14343" }}>{missingFtf} Missing FTF</span>
+          )}
         </div>
         {open ? <ChevronDown size={16} color="#64708A" /> : <ChevronRight size={16} color="#64708A" />}
       </button>
       {open && (
         <div className="px-5 pb-5 pt-1 space-y-3" style={{ borderTop: "1px solid #E3E7ED" }}>
           <p className="text-sm" style={{ color: "#64708A" }}>Medicare requires a Face-to-Face encounter prior to the 180-day recertification. Missing by one day causes 100% claim suspension.</p>
-          {MOCK_PATIENTS.map((p, i) => {
+          {patients.map((p, i) => {
             const pct = (p.day / p.totalDays) * 100;
             const isRed = p.day >= 170 && !p.ftfComplete;
             const isWarn = p.day >= 160 && !p.ftfComplete;
