@@ -343,6 +343,29 @@ Rules: use ACTUAL numbers from the text, expressed as percentages 0-100. If a va
   }
 }
 
+// ── PEPPER analysis (Stage D) ────────────────────────────────────────────────
+// PEPPER compares a hospice to national statistics across "target areas" CMS
+// monitors for improper-payment risk. At/above the 80th percentile = HIGH outlier
+// (audit risk). Reports however many target areas the document contains — no
+// fixed count. Returns null on parse failure so the caller skips the card.
+async function analyzePEPPER(text) {
+  const system = `You are a Medicare hospice PEPPER (Program for Evaluating Payment Patterns Electronic Report) analyst for Connect Shield. You are given the text of a hospice's PEPPER report. PEPPER compares this hospice to national/state/MAC statistics across several "target areas" that CMS monitors for improper-payment risk. Each target area shows the hospice's value and a percentile ranking. A hospice AT OR ABOVE the 80th percentile is a HIGH outlier (potential over-utilization / audit risk); AT OR BELOW the 20th percentile is a LOW outlier.
+
+Extract EVERY target area present in the report — do NOT assume a fixed number. Common hospice PEPPER target areas include Long Length of Stay, Live Discharges (No Longer Terminally Ill / Revocations / not related to a move), Continuous Home Care in an Assisted Living Facility, and Routine Home Care in a Nursing Facility / Skilled Nursing Facility / Assisted Living Facility — but report whatever the document actually contains.
+
+Return ONLY valid JSON, no markdown, in exactly this shape:
+{"reportPeriod":"the report period shown, or empty string","reportDateISO":"YYYY-MM-DD for the end of that period, or empty string","outlierCount":0,"targetAreaCount":0,"topConcern":"one short sentence naming the highest-risk target area, or empty string","targetAreas":[{"name":"Long Length of Stay","value":"the hospice's value/percentage as shown, or empty string","percentile":null,"outlier":"high"}]}
+
+Rules: base everything ONLY on the provided text — never invent numbers. percentile is the national percentile as an integer 0-100 (null if not shown). outlier is "high" if percentile >= 80, "low" if percentile <= 20, otherwise "none". outlierCount = number of target areas whose outlier is "high". targetAreaCount = total target areas found. Plain JSON only, no markdown.`;
+  try {
+    const raw = await callClaude(system, (text || "").slice(0, 12000), 2000);
+    return parseJSON(raw);
+  } catch (e) {
+    console.error("[pepper] analyze error", e);
+    return null;
+  }
+}
+
 const severityColor = (s) => s === "high" ? "#D14343" : s === "medium" ? "#C98A1F" : "#2E9E62";
 const scoreColor = (s) => s >= 85 ? "#2E9E62" : s >= 70 ? "#C98A1F" : "#D14343";
 const ssviColor = (s) => s <= 4 ? "#2E9E62" : s <= 7 ? "#C98A1F" : "#D14343";
@@ -878,10 +901,11 @@ function SSVIBreakdownPanel({ ssviData, estimatedData }) {
 // per-clinic state (survives reload / any device), separate from the current
 // session's analysisData. SSVI is NOT here — it has its own panel below.
 const DASHBOARD_CARD_TYPES = [
-  { type: "cap",   label: "Medicare CAP & Beneficiary", icon: PieChart },
-  { type: "psr",   label: "PS&R Summary",               icon: Activity },
-  { type: "cahps", label: "CAHPS Survey",               icon: Target },
-  { type: "qapi",  label: "QAPI Program",               icon: ShieldCheck },
+  { type: "cap",    label: "Medicare CAP & Beneficiary", icon: PieChart },
+  { type: "psr",    label: "PS&R Summary",               icon: Activity },
+  { type: "pepper", label: "PEPPER Report",              icon: BarChart3 },
+  { type: "cahps",  label: "CAHPS Survey",               icon: Target },
+  { type: "qapi",   label: "QAPI Program",               icon: ShieldCheck },
 ];
 
 function fmtCardDate(iso) {
@@ -948,6 +972,13 @@ function ComplianceCardsRow({ clinicId }) {
         return { value: `${a.componentsDocumented}/${total}`, label: "components documented", color };
       }
       return { value: "On file", label: "QAPI data saved", color: "#2E9E62" };
+    }
+    if (type === "pepper") {
+      if (a.outlierCount != null) {
+        const total = a.targetAreaCount != null ? a.targetAreaCount : (Array.isArray(a.targetAreas) ? a.targetAreas.length : "—");
+        return { value: `${a.outlierCount}/${total}`, label: "areas above 80th percentile", color: a.outlierCount > 0 ? "#D14343" : "#2E9E62" };
+      }
+      return { value: "On file", label: "PEPPER data saved", color: "#2E9E62" };
     }
     return { value: "—", label: "", color: "#64708A" };
   };
@@ -1040,6 +1071,35 @@ function ComplianceCardsRow({ clinicId }) {
               })}
             </div>
           )}
+        </div>
+      );
+    }
+    if (type === "pepper") {
+      const areas = Array.isArray(a.targetAreas) ? a.targetAreas : [];
+      return (
+        <div className="space-y-2">
+          {a.topConcern && (
+            <div className="text-sm rounded-lg px-3 py-2" style={{ background: "#FEF3E2", color: "#7A5700" }}>Top concern: {a.topConcern}</div>
+          )}
+          {areas.map((ta, i) => {
+            const high = ta.outlier === "high";
+            const low = ta.outlier === "low";
+            const color = high ? "#D14343" : low ? "#C98A1F" : "#2E9E62";
+            const bg = high ? "#FDECEA" : low ? "#FEF3E2" : "#F5F6F8";
+            return (
+              <div key={i} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2" style={{ background: bg }}>
+                <div className="min-w-0">
+                  <div className="text-sm" style={{ color: "#16202E" }}>{ta.name}</div>
+                  {ta.value ? <div className="text-xs font-mono" style={{ color: "#64708A" }}>{ta.value}</div> : null}
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-sm font-mono" style={{ color }}>{ta.percentile != null ? `${ta.percentile}th pct` : "—"}</div>
+                  {high && <div className="text-[10px] font-mono" style={{ color: "#D14343" }}>⚠ high outlier</div>}
+                  {low && <div className="text-[10px] font-mono" style={{ color: "#C98A1F" }}>low outlier</div>}
+                </div>
+              </div>
+            );
+          })}
         </div>
       );
     }
@@ -2554,27 +2614,28 @@ export default function ConnectShield({ initialCcn = null, clinicName = null, cl
     setTab("dashboard");
   };
 
-  // Option A: when a document is saved to the Document Library, if it's a QAPI
-  // doc, analyze its text against the CoP checklist and upsert the QAPI card.
-  // Fire-and-forget from the vault's perspective; failures only log.
+  // Option A: when a document is saved to the Document Library, route it to the
+  // right analyzer by detected type (QAPI plan → QAPI card, PEPPER report → PEPPER
+  // card) and upsert that dashboard card. Fire-and-forget; failures only log.
   const handleLibraryDocSaved = useCallback(async (file, text) => {
     if (!clinicId || !text) return;
     try {
       const type = detectReportType(file?.name || "", text);
-      if (type !== "qapi") return;
-      console.log("[qapi] QAPI document detected, analyzing:", file?.name);
-      const analysis = await analyzeQAPI(text);
-      if (!analysis) { console.warn("[qapi] analysis returned nothing"); return; }
+      let reportType = null, analysis = null;
+      if (type === "qapi") { reportType = "qapi"; console.log("[qapi] QAPI document detected, analyzing:", file?.name); analysis = await analyzeQAPI(text); }
+      else if (type === "pepper") { reportType = "pepper"; console.log("[pepper] PEPPER document detected, analyzing:", file?.name); analysis = await analyzePEPPER(text); }
+      else return; // other types are just stored, no card
+      if (!analysis) { console.warn(`[${reportType}] analysis returned nothing`); return; }
       const supabase = createClient();
       const { error } = await upsertReportCard({
-        supabase, clinicId, reportType: "qapi", analysis,
+        supabase, clinicId, reportType, analysis,
         reportDate: bestReportDate(analysis.reportDateISO, analysis.reportPeriod),
         reportPeriodLabel: analysis.reportPeriod || null,
       });
-      if (error) console.error("[qapi] card upsert error", error);
-      else console.log("[qapi] card upserted from library doc:", file?.name);
+      if (error) console.error(`[${reportType}] card upsert error`, error);
+      else console.log(`[${reportType}] card upserted from library doc:`, file?.name);
     } catch (e) {
-      console.error("[qapi] library analysis failed", e);
+      console.error("[library] analysis failed", e);
     }
   }, [clinicId]);
 
