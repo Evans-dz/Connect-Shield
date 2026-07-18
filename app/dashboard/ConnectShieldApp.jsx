@@ -146,6 +146,77 @@ const DOC_BUCKET = "clinic-docs";
 function sanitizeFileName(name) {
   return (name || "file").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "file";
 }
+
+// Persist the "latest of each type" dashboard cards to Supabase.
+// KEY RULE: only upsert a card for a report type when THIS analysis actually
+// produced meaningful data for it. That way a PS&R-only upload never overwrites
+// an existing CAHPS or CAP card — each type updates independently, so the
+// dashboard always shows the most recent good data per type per clinic.
+// SSVI is intentionally NOT saved here — its card is fed by the real CCN lookup
+// (published CMS data), not the report's estimate. QAPI arrives in Stage C.
+async function saveReportCards({ supabase, clinicId, merged, sourceDocId = null }) {
+  if (!supabase || !clinicId || !merged) return;
+  const cats = merged.complianceCategories || [];
+  const cards = [];
+
+  // ── CAP / Beneficiary ──
+  const cap = merged.capData || {};
+  if (cap.capLimit != null || cap.netReimbursement != null || cap.totalBeneficiaryCount != null) {
+    cards.push({
+      report_type: "cap",
+      analysis: {
+        capData: cap,
+        category: cats.find((c) => c.id === "cap_exposure") || null,
+      },
+    });
+  }
+
+  // ── PS&R (consolidated leading indicators + composite) ──
+  const psr = merged.psrMetrics || {};
+  const psrHasData = Object.values(psr).some((v) => v != null);
+  if (psrHasData) {
+    cards.push({
+      report_type: "psr",
+      analysis: {
+        psrMetrics: psr,
+        overallComplianceScore: merged.overallComplianceScore ?? null,
+        overallRiskLevel: merged.overallRiskLevel ?? null,
+        categories: cats.filter((c) =>
+          ["rn_intensity", "length_of_stay", "billing_trend", "level_of_care", "pharmacy_utilization"].includes(c.id)
+        ),
+      },
+    });
+  }
+
+  // ── CAHPS ──
+  const q = merged.qualityMetrics || {};
+  if (q.cahpsOverallScore != null) {
+    cards.push({
+      report_type: "cahps",
+      analysis: {
+        cahpsOverallScore: q.cahpsOverallScore,
+        cahpsNationalAvg: q.cahpsNationalAvg ?? null,
+        category: cats.find((c) => c.id === "survey_readiness") || null,
+      },
+    });
+  }
+
+  for (const c of cards) {
+    const { error } = await supabase.from("clinic_report_cards").upsert(
+      {
+        clinic_id: clinicId,
+        report_type: c.report_type,
+        analysis: c.analysis,
+        source_doc_id: sourceDocId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "clinic_id,report_type" }
+    );
+    if (error) console.error("[report-cards] upsert error", c.report_type, error);
+    else console.log("[report-cards] upserted card:", c.report_type);
+  }
+}
+
 const severityColor = (s) => s === "high" ? "#D14343" : s === "medium" ? "#C98A1F" : "#2E9E62";
 const scoreColor = (s) => s >= 85 ? "#2E9E62" : s >= 70 ? "#C98A1F" : "#D14343";
 const ssviColor = (s) => s <= 4 ? "#2E9E62" : s <= 7 ? "#C98A1F" : "#D14343";
@@ -1103,6 +1174,13 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
         criticalFindings: part2.criticalFindings || [],
       };
       onAnalysisData(merged);
+      // Stage A: persist per-type dashboard cards to Supabase (non-destructive
+      // per type). Wrapped so a card-save issue never breaks the analysis UX.
+      try {
+        if (clinicId) await saveReportCards({ supabase, clinicId, merged });
+      } catch (cardErr) {
+        console.error("[report-cards] save failed", cardErr);
+      }
       setFiles([]);
     } catch (e) {
       setError("Analysis error: " + e.message);
