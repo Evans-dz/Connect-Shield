@@ -1165,12 +1165,35 @@ function ComplianceCardsRow({ clinicId }) {
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function Dashboard({ analysisData, ssviData, hideLookup, clinicId }) {
+  const [supabase] = useState(() => createClient());
   const [openId, setOpenId] = useState(null);
   const [ccnResult, setCcnResult] = useState(ssviData);
+  const [storedAnalysis, setStoredAnalysis] = useState(null); // full analysis persisted in Supabase
 
   useEffect(() => { setCcnResult(ssviData); }, [ssviData]);
 
-  const hasAnyData = analysisData || ccnResult;
+  // On mount, load the last full analysis for this clinic so the ENTIRE dashboard
+  // (composite score, leading indicators, CAP/PS&R detail, findings) survives a
+  // reload — not just the persistent cards. In-session analysisData still wins when
+  // present (a fresh upload), this is the fallback after a refresh.
+  useEffect(() => {
+    if (!clinicId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("clinic_report_cards")
+          .select("analysis")
+          .eq("clinic_id", clinicId)
+          .eq("report_type", "composite")
+          .maybeSingle();
+        if (!cancelled && data?.analysis) setStoredAnalysis(data.analysis);
+      } catch (e) { /* no saved analysis yet — fine */ }
+    })();
+    return () => { cancelled = true; };
+  }, [supabase, clinicId]);
+
+  const hasAnyData = analysisData || storedAnalysis || ccnResult;
 
   if (!hasAnyData) {
     return (
@@ -1207,7 +1230,7 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId }) {
     );
   }
 
-  const d = analysisData;
+  const d = analysisData || storedAnalysis;
   const cap = d?.capData || {};
   const metrics = d?.psrMetrics || {};
   const quality = d?.qualityMetrics || {};
@@ -1617,6 +1640,15 @@ function DocumentsHub({ clinicId, onAnalysisData }) {
             criticalFindings: part2.criticalFindings || [],
           };
           await saveReportCards({ supabase, clinicId, merged });
+          // Persist the FULL analysis so the entire dashboard (composite score,
+          // leading indicators, CAP/PS&R detail, findings) survives a reload — not
+          // just the per-type cards. Stored under a "composite" type that the cards
+          // row ignores; the Dashboard loads it on mount. Date-aware like the rest.
+          await upsertReportCard({
+            supabase, clinicId, reportType: "composite", analysis: merged,
+            reportDate: bestReportDate(merged.reportPeriodEnd, merged.reportPeriod),
+            reportPeriodLabel: merged.reportPeriod || null,
+          });
           if (onAnalysisData) onAnalysisData(merged); // updates the in-session scorecard/tiles
         } catch (e) { console.error("[documents] compliance analysis failed", e); }
       }
