@@ -5,6 +5,11 @@ import ConnectShield from "./ConnectShieldApp";
 
 export const metadata = { title: "Dashboard", robots: { index: false } };
 
+// The demo clinic (Demo Hospice LLC). On the demo we DON'T auto-load a locked CCN,
+// so the CCN lookup box shows and you can type any prospect's CCN to pull their
+// live SSVI. Every real clinic still auto-loads its own CCN as normal.
+const DEMO_CLINIC_ID = "1e4e1e80-94bf-4dcd-bf3d-7920b5246a16";
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -35,5 +40,16 @@ export default async function DashboardPage() {
     ccn = ccns?.[0]?.ccn || null;
   }
 
-  return <ConnectShield initialCcn={ccn} clinicName={clinicName} clinicId={profile?.clinic_id || null} signOutAction={signOut} />;
+  // On the demo clinic, don't lock a CCN — show the lookup so any CCN can be entered.
+  const isDemo = profile?.clinic_id === DEMO_CLINIC_ID;
+  const initialCcn = isDemo ? null : ccn;
+
+  return (
+    <ConnectShield
+      initialCcn={initialCcn}
+      clinicName={clinicName}
+      clinicId={profile?.clinic_id || null}
+      signOutAction={signOut}
+    />
+  );
 }
