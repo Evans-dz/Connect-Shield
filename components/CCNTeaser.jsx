@@ -15,6 +15,10 @@ function num(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+function plural(n, one, many) {
+  return Math.abs(n) === 1 ? one : many;
+}
+
 function Stat({ value, max, label, tone, sub }) {
   return (
     <div className="flex items-center gap-3">
@@ -68,6 +72,14 @@ export default function CCNTeaser() {
   const spendingMax = (data ? num(data.spendingMax) : null) ?? 8;
   const percentile = data ? num(data.percentile) : null;
   const showBreakdown = flagged !== null || spending !== null;
+
+  // Which half of the score is the bigger contributor — only claimed when both
+  // numbers are known and one is actually larger.
+  const bothKnown = flagged !== null && spending !== null;
+  const spendingLeads = bothKnown && spending > flagged;
+  const utilizationLeads = bothKnown && flagged > spending;
+
+  const delta = data && data.priorTotal != null ? Math.abs(data.total - data.priorTotal) : null;
 
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: "#14213D", border: "1px solid #243354" }}>
@@ -125,10 +137,12 @@ export default function CCNTeaser() {
               </div>
               <div className="text-xs font-mono mt-3 flex items-center justify-center sm:justify-start gap-3" style={{ color: "#93A0B8" }}>
                 <span>National avg 6.42</span>
-                {data.priorTotal != null && (
+                {delta !== null && (
                   <span className="inline-flex items-center gap-1" style={{ color: data.total > data.priorTotal ? "#E0857A" : "#7FC79E" }}>
                     {data.total > data.priorTotal ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-                    {Math.abs(data.total - data.priorTotal)} pts vs FY{data.priorYear}
+                    {delta === 0
+                      ? `no change vs FY${data.priorYear}`
+                      : `${delta} ${plural(delta, "pt", "pts")} vs FY${data.priorYear}`}
                   </span>
                 )}
               </div>
@@ -139,7 +153,7 @@ export default function CCNTeaser() {
           {showBreakdown && (
             <div className="mt-3 rounded-2xl p-5" style={{ background: "#0E1830", border: "1px solid #243354" }}>
               <div className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#5A6B8C" }}>
-                Where your {data.total} points come from
+                Where your {data.total} {plural(data.total, "point", "points")} come from
               </div>
 
               <div className="grid sm:grid-cols-2 gap-4 mt-4">
@@ -148,8 +162,18 @@ export default function CCNTeaser() {
                     value={flagged}
                     max={flaggedMax}
                     tone={data.tone}
-                    label={flagged === 0 ? "No utilization flags" : `${flagged} utilization ${flagged === 1 ? "measure" : "measures"} flagged`}
-                    sub={flagged === 0 ? "Clean on utilization this year" : "Each flag adds a point to your score"}
+                    label={
+                      flagged === 0
+                        ? "No utilization flags"
+                        : `${flagged} utilization ${plural(flagged, "measure", "measures")} flagged`
+                    }
+                    sub={
+                      flagged === 0
+                        ? "Clean on utilization this year"
+                        : utilizationLeads
+                        ? "Driving most of your total"
+                        : "Each flag adds a point to your score"
+                    }
                   />
                 )}
                 {spending !== null && (
@@ -158,7 +182,13 @@ export default function CCNTeaser() {
                     max={spendingMax}
                     tone={data.tone}
                     label="Spending score"
-                    sub={spending > spendingMax / 2 ? "Driving most of your total" : "Scored separately from utilization"}
+                    sub={
+                      spendingLeads
+                        ? "Driving most of your total"
+                        : spending === 0
+                        ? "No spending points this year"
+                        : "Scored separately from utilization"
+                    }
                   />
                 )}
               </div>
