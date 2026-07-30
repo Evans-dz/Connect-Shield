@@ -47,7 +47,7 @@ export default async function Page() {
     : '—'
 
   return (
-    <main>
+    <main className="mx-auto max-w-4xl px-5 py-10 sm:px-6 sm:py-14">
       <h1>Hospice SSVI Scores</h1>
       <p>
         The Service and Spending Variation Index is a 0–16 score CMS introduced
