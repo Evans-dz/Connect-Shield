@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
+import { SITE } from '@/lib/site'
 
 const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -38,7 +39,7 @@ export async function generateMetadata({ params }) {
     title: `${st} Hospice SSVI Scores — All Medicare-Certified Agencies | Connect Shield`,
     description: `FY2025 CMS Service and Spending Variation Index scores for every Medicare-certified hospice in ${st}, ranked highest to lowest.`,
     alternates: {
-      canonical: `https://connect-shield.com/hospice/state/${params.code.toLowerCase()}`,
+      canonical: `${SITE.url}/hospice/state/${params.code.toLowerCase()}`,
     },
   }
 }
