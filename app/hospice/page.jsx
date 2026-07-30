@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
+import { SITE } from '@/lib/site'
 
 const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -9,10 +10,11 @@ const db = createClient(
 export const revalidate = 86400
 
 export const metadata = {
-  title: 'Hospice SSVI Scores — Every Medicare-Certified Agency | Connect Shield',
+  title:
+    'Hospice SSVI Scores — Every Medicare-Certified Agency | Connect Shield',
   description:
     'Look up the CMS Service and Spending Variation Index (SSVI) score for any Medicare-certified hospice. FY2025 and FY2024 scores for 6,642 agencies, free and no signup.',
-  alternates: { canonical: 'https://connect-shield.com/hospice' },
+  alternates: { canonical: `${SITE.url}/hospice` },
 }
 
 export default async function Page() {
@@ -38,9 +40,11 @@ export default async function Page() {
   }
 
   const states = Object.keys(byState).sort()
-  const nationalAvg = (
-    rows.reduce((s, r) => s + Number(r.fy2025_total_ssvi), 0) / rows.length
-  ).toFixed(1)
+  const nationalAvg = rows.length
+    ? (
+        rows.reduce((s, r) => s + Number(r.fy2025_total_ssvi), 0) / rows.length
+      ).toFixed(1)
+    : '—'
 
   return (
     <main>
