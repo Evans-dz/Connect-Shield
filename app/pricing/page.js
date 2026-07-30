@@ -6,7 +6,7 @@ import { SITE } from "@/lib/site";
 export const metadata = {
   title: "Pricing — Every Tool, Every Update, One Price",
   description:
-    "Connect Shield pricing for hospice agencies. Every plan includes every compliance tool and all future features — you only pay for how many agencies and people you have. HIPAA-compliant.",
+    "Connect Shield pricing for hospice agencies. Every plan includes every compliance tool and all future features — you only pay for how many agencies and people you have.",
   alternates: { canonical: `${SITE.url}/pricing` },
 };
 
@@ -82,7 +82,7 @@ const ADDONS = [
   {
     name: "90-Day SSVI Remediation Plan",
     body: "A done-for-you roadmap to pull a high SSVI down — which measures to attack, in what order, with milestones.",
-    price: "$2,500–$3,500",
+    price: "$2,500-$3,500",
     note: "one-time",
     cadence: "One-time",
     flag: "Most requested",
@@ -106,17 +106,17 @@ const ADDONS = [
   {
     name: "Survey Readiness / Mock Survey",
     body: "A pre-survey run-through against the Conditions of Participation so nothing surprises you on survey day.",
-    price: "$1,500–$3,000",
+    price: "$1,500-$3,000",
     note: "one-time",
     cadence: "One-time",
     flag: false,
   },
   {
-    name: "Team Training Workshop",
-    body: "A live onboarding session to get your whole team fluent in the dashboard and reading their own numbers.",
-    price: "$500–$1,000",
-    note: "one-time",
-    cadence: "One-time",
+    name: "Additional Seats",
+    body: "Add more users to any plan. Each seat gets full access to your clinic's dashboard, reports, and Atlas.",
+    price: "$85/mo",
+    note: "per seat",
+    cadence: "Recurring",
     flag: false,
   },
 ];
@@ -136,7 +136,7 @@ export default function Pricing() {
             No feature tiers, no add-on traps. Every plan includes the entire platform and every future feature we ship. You only pay for how many agencies and people you have.
           </p>
           <div className="flex items-center justify-center gap-2 mt-6 text-[12px] font-mono animate-fade-up" style={{ color: "#7C8AA8", animationDelay: "140ms" }}>
-            Unlimited AI analysis (fair use) · All future features included · HIPAA-compliant
+            Unlimited AI analysis (fair use) · All future features included · Encrypted & per-clinic isolated
           </div>
         </div>
       </section>
@@ -222,7 +222,7 @@ export default function Pricing() {
         </div>
 
         <p className="text-center text-[12px] font-mono mt-8" style={{ color: "#8992A3" }}>
-          Monthly, cancel anytime · Annual available (2 months free) · Every plan is HIPAA-compliant with a secure per-clinic portal
+          12-month commitment · billed monthly · Secure, encrypted per-clinic portal
         </p>
       </section>
 
