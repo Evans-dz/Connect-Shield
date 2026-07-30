@@ -1,14 +1,13 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Search, Loader2, Lock, CheckCircle2, AlertCircle, TrendingUp, TrendingDown } from "lucide-react";
+import { Search, Loader2, Lock, CheckCircle2, AlertCircle, TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
 import Gauge from "./Gauge";
 import { SITE } from "@/lib/site";
 
 const TONE_BG = { low: "#EAF6EF", mid: "#FEF3E2", high: "#FDECEA" };
 const TONE_FG = { low: "#1A6E41", mid: "#7A5700", high: "#B23A2E" };
 
-// Safe number coercion — returns null for anything not a usable number.
 function num(v) {
   if (v === null || v === undefined || typeof v === "boolean") return null;
   const n = Number(v);
@@ -65,7 +64,6 @@ export default function CCNTeaser() {
     }
   };
 
-  // Aggregates from the API. Each hides itself if the API doesn't send it.
   const flagged = data ? num(data.flaggedCount) : null;
   const flaggedMax = (data ? num(data.utilizationMax) : null) ?? 8;
   const spending = data ? num(data.spending) : null;
@@ -73,8 +71,6 @@ export default function CCNTeaser() {
   const percentile = data ? num(data.percentile) : null;
   const showBreakdown = flagged !== null || spending !== null;
 
-  // Which half of the score is the bigger contributor — only claimed when both
-  // numbers are known and one is actually larger.
   const bothKnown = flagged !== null && spending !== null;
   const spendingLeads = bothKnown && spending > flagged;
   const utilizationLeads = bothKnown && flagged > spending;
@@ -84,10 +80,10 @@ export default function CCNTeaser() {
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: "#14213D", border: "1px solid #243354" }}>
       <div className="p-6 md:p-8">
-        <div className="eyebrow" style={{ color: "#E8CFA0" }}>Free · Encrypted · All 7,059 US hospices</div>
+        <div className="eyebrow" style={{ color: "#E8CFA0" }}>Free · No signup · All 6,643 scored US hospices</div>
         <h3 className="font-display text-2xl md:text-[26px] text-white mt-3">Look up your hospice's SSVI score</h3>
         <p className="text-sm mt-2 max-w-md" style={{ color: "#93A0B8" }}>
-          Enter your CCN to see your published CMS score and risk level instantly. Sign in to unlock the full nine-measure breakdown.
+          Enter your CCN to see your published CMS score, your full eight-measure breakdown, and how you rank nationally — free.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-2 mt-5">
@@ -120,6 +116,15 @@ export default function CCNTeaser() {
             <span className="text-sm" style={{ color: "#D8C199" }}>{error}</span>
           </div>
         )}
+
+        {!data && !error && (
+          <div className="text-xs mt-4" style={{ color: "#5A6B8C" }}>
+            Don&apos;t know your CCN?{" "}
+            <Link href="/hospice" className="underline" style={{ color: "#93A0B8" }}>
+              Browse all agencies by state
+            </Link>
+          </div>
+        )}
       </div>
 
       {data && (
@@ -136,7 +141,7 @@ export default function CCNTeaser() {
                 <span className="text-sm font-mono font-semibold">FY{data.year}: {data.total}/16 · {data.risk}</span>
               </div>
               <div className="text-xs font-mono mt-3 flex items-center justify-center sm:justify-start gap-3" style={{ color: "#93A0B8" }}>
-                <span>National avg 6.42</span>
+                <span>National avg 6.4</span>
                 {delta !== null && (
                   <span className="inline-flex items-center gap-1" style={{ color: data.total > data.priorTotal ? "#E0857A" : "#7FC79E" }}>
                     {data.total > data.priorTotal ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
@@ -146,10 +151,17 @@ export default function CCNTeaser() {
                   </span>
                 )}
               </div>
+              <Link
+                href={`/hospice/ccn/${encodeURIComponent(data.ccn)}`}
+                className="inline-flex items-center gap-1.5 text-sm mt-4 font-medium"
+                style={{ color: "#E8CFA0" }}
+              >
+                View full FY2025 breakdown
+                <ArrowRight size={14} />
+              </Link>
             </div>
           </div>
 
-          {/* The tease — where the score comes from, never which measures */}
           {showBreakdown && (
             <div className="mt-3 rounded-2xl p-5" style={{ background: "#0E1830", border: "1px solid #243354" }}>
               <div className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#5A6B8C" }}>
@@ -195,35 +207,41 @@ export default function CCNTeaser() {
 
               {percentile !== null && (
                 <div className="mt-4 pt-4 text-xs" style={{ borderTop: "1px solid #243354", color: "#93A0B8" }}>
-                  Scores higher than <span className="font-mono" style={{ color: "#E8CFA0" }}>{percentile}%</span> of scored US hospices — higher is worse.
+                  Scores higher than <span className="font-mono" style={{ color: "#E8CFA0" }}>{percentile}%</span> of scored US hospices. The SSVI is not a quality rating — it measures divergence from peer norms.
                 </div>
               )}
             </div>
           )}
 
-          {/* The gate */}
-          <div className="relative mt-3 rounded-2xl overflow-hidden" style={{ border: "1px solid #243354" }}>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-4" aria-hidden="true">
-              {["No CHC/GIP", "Nursing facility", "Last two days", "LOS ≥180", "Live discharge", "SN minutes", "Weekend visits", "Return in 7 days"].map((m) => (
-                <div key={m} className="rounded-lg px-3 py-3 blur-[3px] select-none" style={{ background: "#14213D" }}>
-                  <div className="text-[10px] font-mono" style={{ color: "#5A6B8C" }}>MEASURE</div>
-                  <div className="text-xs text-white mt-1">{m}</div>
+          {/* What the public data can't tell you */}
+          <div className="mt-3 rounded-2xl p-5 md:p-6" style={{ background: "#0E1830", border: "1px solid #243354" }}>
+            <div className="flex items-start gap-3">
+              <Lock size={18} color="#E8CFA0" className="shrink-0 mt-0.5" />
+              <div>
+                <div className="text-sm text-white font-medium">
+                  {flagged !== null && flagged > 0
+                    ? `You know which ${flagged} flagged. You don't know how far over you are.`
+                    : "Your score is public. What's driving it isn't."}
                 </div>
-              ))}
-            </div>
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6" style={{ background: "linear-gradient(180deg, rgba(14,24,48,0.55), rgba(14,24,48,0.92))" }}>
-              <Lock size={18} color="#E8CFA0" />
-              <div className="text-sm text-white mt-2 font-medium">
-                {flagged !== null && flagged > 0
-                  ? `See which ${flagged} of the ${flaggedMax} flagged you — and how to fix them`
-                  : "See exactly what's driving your score"}
+                <div className="text-xs mt-2 leading-relaxed" style={{ color: "#93A0B8" }}>
+                  CMS publishes the flags, not your underlying numbers. Connect Shield reads
+                  your own PS&amp;R, PEPPER, CAHPS, and QAPI reports against your SSVI — showing
+                  your actual values, how far each sits from the threshold, what to fix first,
+                  and how your score moves as you fix it.
+                </div>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <Link href="/demo" className="px-4 py-2 rounded-lg text-sm font-medium" style={{ background: "#B8863F", color: "#0E1830" }}>
+                    Book a demo
+                  </Link>
+                  <Link
+                    href={`/hospice/ccn/${encodeURIComponent(data.ccn)}`}
+                    className="px-4 py-2 rounded-lg text-sm font-medium"
+                    style={{ border: "1px solid #243354", color: "#93A0B8" }}
+                  >
+                    See the free breakdown
+                  </Link>
+                </div>
               </div>
-              <div className="text-xs mt-1 max-w-xs" style={{ color: "#93A0B8" }}>
-                Your full breakdown, your values against each CMS threshold, and what to fix — inside your secure portal.
-              </div>
-              <Link href="/demo" className="mt-4 px-4 py-2 rounded-lg text-sm font-medium" style={{ background: "#B8863F", color: "#0E1830" }}>
-                Book a demo to see which ones
-              </Link>
             </div>
           </div>
         </div>
