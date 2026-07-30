@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
+import { SITE } from '@/lib/site'
 
 const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -48,7 +49,7 @@ export async function generateMetadata({ params }) {
   return {
     title: `${a.hospice_name}${where ? ` (${where})` : ''} — SSVI ${a.fy2025_total_ssvi} | Connect Shield`,
     description: `FY2025 CMS Service and Spending Variation Index for ${a.hospice_name}, CCN ${a.ccn}. Score ${a.fy2025_total_ssvi} of 16, higher than ${a.pct_national}% of hospices nationally.`,
-    alternates: { canonical: `https://connect-shield.com/hospice/${a.slug}` },
+    alternates: { canonical: `${SITE.url}/hospice/${a.slug}` },
   }
 }
 
@@ -100,7 +101,9 @@ export default async function Page({ params }) {
         {change !== null && a.fy2024_total_ssvi !== null && (
           <p>
             {change > 0 ? 'Up' : change < 0 ? 'Down' : 'Unchanged'}
-            {change !== 0 ? ` ${Math.abs(change)} point${Math.abs(change) === 1 ? '' : 's'}` : ''}{' '}
+            {change !== 0
+              ? ` ${Math.abs(change)} point${Math.abs(change) === 1 ? '' : 's'}`
+              : ''}{' '}
             from FY2024 (score {a.fy2024_total_ssvi}).
           </p>
         )}
