@@ -8,47 +8,29 @@ import { SITE } from "@/lib/site";
 const TONE_BG = { low: "#EAF6EF", mid: "#FEF3E2", high: "#FDECEA" };
 const TONE_FG = { low: "#1A6E41", mid: "#7A5700", high: "#B23A2E" };
 
-const MEASURE_TOTAL = 9;
+// Safe number coercion — returns null for anything not a usable number.
+function num(v) {
+  if (v === null || v === undefined || typeof v === "boolean") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
-// Resolve "how many measures flagged" from whatever shape the lookup API returns.
-// Returns a number 0..MEASURE_TOTAL, or null if the API doesn't provide it.
-function resolveFlagged(d) {
-  if (!d) return null;
-
-  // 1) A direct count field.
-  const direct = [d.flaggedCount, d.flagged_count, d.flagged, d.measuresFlagged, d.measures_flagged];
-  for (const v of direct) {
-    if (v === null || v === undefined || typeof v === "boolean") continue;
-    const n = Number(v);
-    if (Number.isFinite(n) && n >= 0 && n <= MEASURE_TOTAL) return n;
-  }
-
-  // 2) A collection of measures we can count.
-  const raw = d.measures || d.flags || d.measureFlags || d.measure_flags;
-  const items = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : null;
-  if (!items) return null;
-
-  let count = 0;
-  for (const m of items) {
-    if (typeof m === "boolean") {
-      if (m) count++;
-      continue;
-    }
-    if (typeof m === "number") {
-      if (m > 0) count++;
-      continue;
-    }
-    if (m && typeof m === "object") {
-      const v = m.flagged ?? m.flag ?? m.value ?? m.points ?? m.score;
-      if (typeof v === "boolean") {
-        if (v) count++;
-      } else {
-        const n = Number(v);
-        if (Number.isFinite(n) && n > 0) count++;
-      }
-    }
-  }
-  return count > MEASURE_TOTAL ? MEASURE_TOTAL : count;
+function Stat({ value, max, label, tone, sub }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div
+        className="shrink-0 w-14 h-14 rounded-xl flex flex-col items-center justify-center"
+        style={{ background: TONE_BG[tone] || "#FEF3E2", color: TONE_FG[tone] || "#7A5700" }}
+      >
+        <span className="font-mono text-xl font-semibold leading-none">{value}</span>
+        <span className="font-mono text-[9px] mt-1 leading-none">of {max}</span>
+      </div>
+      <div className="min-w-0">
+        <div className="text-sm text-white font-medium leading-snug">{label}</div>
+        <div className="text-xs mt-0.5" style={{ color: "#93A0B8" }}>{sub}</div>
+      </div>
+    </div>
+  );
 }
 
 export default function CCNTeaser() {
@@ -79,7 +61,13 @@ export default function CCNTeaser() {
     }
   };
 
-  const flagged = resolveFlagged(data);
+  // Aggregates from the API. Each hides itself if the API doesn't send it.
+  const flagged = data ? num(data.flaggedCount) : null;
+  const flaggedMax = (data ? num(data.utilizationMax) : null) ?? 8;
+  const spending = data ? num(data.spending) : null;
+  const spendingMax = (data ? num(data.spendingMax) : null) ?? 8;
+  const percentile = data ? num(data.percentile) : null;
+  const showBreakdown = flagged !== null || spending !== null;
 
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: "#14213D", border: "1px solid #243354" }}>
@@ -147,28 +135,39 @@ export default function CCNTeaser() {
             </div>
           </div>
 
-          {/* The tease — count only, never which ones */}
-          {flagged !== null && (
-            <div className="mt-3 rounded-2xl p-5 flex items-center gap-4" style={{ background: "#0E1830", border: "1px solid #243354" }}>
-              <div
-                className="shrink-0 w-14 h-14 rounded-xl flex flex-col items-center justify-center"
-                style={{ background: TONE_BG[data.tone] || "#FEF3E2", color: TONE_FG[data.tone] || "#7A5700" }}
-              >
-                <span className="font-mono text-xl font-semibold leading-none">{flagged}</span>
-                <span className="font-mono text-[9px] mt-1 leading-none">of {MEASURE_TOTAL}</span>
+          {/* The tease — where the score comes from, never which measures */}
+          {showBreakdown && (
+            <div className="mt-3 rounded-2xl p-5" style={{ background: "#0E1830", border: "1px solid #243354" }}>
+              <div className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#5A6B8C" }}>
+                Where your {data.total} points come from
               </div>
-              <div className="flex-1">
-                <div className="text-sm text-white font-medium">
-                  {flagged === 0
-                    ? `No measures flagged out of ${MEASURE_TOTAL}`
-                    : `Flagged on ${flagged} of ${MEASURE_TOTAL} measures`}
-                </div>
-                <div className="text-xs mt-1" style={{ color: "#93A0B8" }}>
-                  {flagged === 0
-                    ? "Clean across the board on this year's published data — here's how to keep it that way."
-                    : "Each flag is a specific utilization pattern CMS scored you on."}
-                </div>
+
+              <div className="grid sm:grid-cols-2 gap-4 mt-4">
+                {flagged !== null && (
+                  <Stat
+                    value={flagged}
+                    max={flaggedMax}
+                    tone={data.tone}
+                    label={flagged === 0 ? "No utilization flags" : `${flagged} utilization ${flagged === 1 ? "measure" : "measures"} flagged`}
+                    sub={flagged === 0 ? "Clean on utilization this year" : "Each flag adds a point to your score"}
+                  />
+                )}
+                {spending !== null && (
+                  <Stat
+                    value={spending}
+                    max={spendingMax}
+                    tone={data.tone}
+                    label="Spending score"
+                    sub={spending > spendingMax / 2 ? "Driving most of your total" : "Scored separately from utilization"}
+                  />
+                )}
               </div>
+
+              {percentile !== null && (
+                <div className="mt-4 pt-4 text-xs" style={{ borderTop: "1px solid #243354", color: "#93A0B8" }}>
+                  Scores higher than <span className="font-mono" style={{ color: "#E8CFA0" }}>{percentile}%</span> of scored US hospices — higher is worse.
+                </div>
+              )}
             </div>
           )}
 
@@ -186,8 +185,8 @@ export default function CCNTeaser() {
               <Lock size={18} color="#E8CFA0" />
               <div className="text-sm text-white mt-2 font-medium">
                 {flagged !== null && flagged > 0
-                  ? `See which ${flagged} flagged you — and how to fix them`
-                  : `See exactly which of the ${MEASURE_TOTAL} measures flagged you`}
+                  ? `See which ${flagged} of the ${flaggedMax} flagged you — and how to fix them`
+                  : "See exactly what's driving your score"}
               </div>
               <div className="text-xs mt-1 max-w-xs" style={{ color: "#93A0B8" }}>
                 Your full breakdown, your values against each CMS threshold, and what to fix — inside your secure portal.
