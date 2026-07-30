@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 import { SITE } from '@/lib/site'
+import SSVILookup from '@/components/SSVILookup'
 
 const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -10,10 +11,9 @@ const db = createClient(
 export const revalidate = 86400
 
 export const metadata = {
-  title:
-    'Hospice SSVI Scores — Every Medicare-Certified Agency | Connect Shield',
+  title: 'Hospice SSVI Scores — Every Medicare-Certified Agency | Connect Shield',
   description:
-    'Look up the CMS Service and Spending Variation Index (SSVI) score for any Medicare-certified hospice. FY2025 and FY2024 scores for 6,642 agencies, free and no signup.',
+    'Look up the CMS Service and Spending Variation Index (SSVI) score for any Medicare-certified hospice. FY2025 and FY2024 scores for 6,643 agencies, free and no signup.',
   alternates: { canonical: `${SITE.url}/hospice` },
 }
 
@@ -47,37 +47,53 @@ export default async function Page() {
     : '—'
 
   return (
-    <main className="mx-auto max-w-4xl px-5 py-10 sm:px-6 sm:py-14">
-      <h1>Hospice SSVI Scores</h1>
-      <p>
-        The Service and Spending Variation Index is a 0–16 score CMS introduced
-        in the FY2027 hospice proposed rule. It combines a 0–8 non-hospice
-        spending score with a 0–8 utilization score built from eight
-        claims-based measures. CMS calculated one for every Medicare-certified
-        hospice in the country.
-      </p>
-      <p>
-        {rows.length.toLocaleString()} agencies · national average FY2025 SSVI{' '}
-        {nationalAvg} of 16
-      </p>
+    <div className="bg-slate-50">
+      <div className="mx-auto max-w-4xl px-5 py-10 sm:px-6 sm:py-14">
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+          Hospice SSVI Scores
+        </h1>
+        <p className="mt-4 text-slate-700">
+          The Service and Spending Variation Index is a 0–16 score CMS
+          introduced in the FY2027 hospice proposed rule. It combines a 0–8
+          non-hospice spending score with a 0–8 utilization score built from
+          eight claims-based measures. CMS calculated one for every
+          Medicare-certified hospice in the country.
+        </p>
+        <p className="mt-3 text-sm text-slate-500">
+          {rows.length.toLocaleString()} agencies · national average FY2025 SSVI{' '}
+          {nationalAvg} of 16 · highest score in the country is 15
+        </p>
 
-      <h2>Browse by state</h2>
-      <ul>
-        {states.map((s) => (
-          <li key={s}>
-            <Link href={`/hospice/state/${s.toLowerCase()}`}>{s}</Link> —{' '}
-            {byState[s].count} agencies, average{' '}
-            {(byState[s].total / byState[s].count).toFixed(1)}
-          </li>
-        ))}
-      </ul>
+        <div className="my-8">
+          <SSVILookup />
+        </div>
 
-      <p>
-        The SSVI is not a quality rating and does not indicate wrongdoing. It
-        measures divergence from peer norms and is one input CMS uses to focus
-        oversight. Source: CMS FY2027 Hospice Wage Index Proposed Rule
-        (CMS-1851-P), SSVI data file.
-      </p>
-    </main>
+        <h2 className="mt-12 text-lg font-semibold text-slate-900">
+          Browse by state
+        </h2>
+        <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3 lg:grid-cols-4">
+          {states.map((s) => (
+            <Link
+              key={s}
+              href={`/hospice/state/${s.toLowerCase()}`}
+              className="bg-white px-4 py-3 hover:bg-amber-50"
+            >
+              <div className="text-sm font-semibold text-slate-900">{s}</div>
+              <div className="mt-0.5 text-xs text-slate-500">
+                {byState[s].count} agencies · avg{' '}
+                {(byState[s].total / byState[s].count).toFixed(1)}
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        <p className="mt-8 text-sm text-slate-500">
+          The SSVI is not a quality rating and does not indicate wrongdoing. It
+          measures divergence from peer norms and is one input CMS uses to focus
+          oversight. Source: CMS FY2027 Hospice Wage Index Proposed Rule
+          (CMS-1851-P), SSVI data file.
+        </p>
+      </div>
+    </div>
   )
 }
