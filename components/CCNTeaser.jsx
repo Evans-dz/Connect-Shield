@@ -8,6 +8,49 @@ import { SITE } from "@/lib/site";
 const TONE_BG = { low: "#EAF6EF", mid: "#FEF3E2", high: "#FDECEA" };
 const TONE_FG = { low: "#1A6E41", mid: "#7A5700", high: "#B23A2E" };
 
+const MEASURE_TOTAL = 9;
+
+// Resolve "how many measures flagged" from whatever shape the lookup API returns.
+// Returns a number 0..MEASURE_TOTAL, or null if the API doesn't provide it.
+function resolveFlagged(d) {
+  if (!d) return null;
+
+  // 1) A direct count field.
+  const direct = [d.flaggedCount, d.flagged_count, d.flagged, d.measuresFlagged, d.measures_flagged];
+  for (const v of direct) {
+    if (v === null || v === undefined || typeof v === "boolean") continue;
+    const n = Number(v);
+    if (Number.isFinite(n) && n >= 0 && n <= MEASURE_TOTAL) return n;
+  }
+
+  // 2) A collection of measures we can count.
+  const raw = d.measures || d.flags || d.measureFlags || d.measure_flags;
+  const items = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : null;
+  if (!items) return null;
+
+  let count = 0;
+  for (const m of items) {
+    if (typeof m === "boolean") {
+      if (m) count++;
+      continue;
+    }
+    if (typeof m === "number") {
+      if (m > 0) count++;
+      continue;
+    }
+    if (m && typeof m === "object") {
+      const v = m.flagged ?? m.flag ?? m.value ?? m.points ?? m.score;
+      if (typeof v === "boolean") {
+        if (v) count++;
+      } else {
+        const n = Number(v);
+        if (Number.isFinite(n) && n > 0) count++;
+      }
+    }
+  }
+  return count > MEASURE_TOTAL ? MEASURE_TOTAL : count;
+}
+
 export default function CCNTeaser() {
   const [ccn, setCcn] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,6 +78,8 @@ export default function CCNTeaser() {
       setLoading(false);
     }
   };
+
+  const flagged = resolveFlagged(data);
 
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: "#14213D", border: "1px solid #243354" }}>
@@ -102,6 +147,31 @@ export default function CCNTeaser() {
             </div>
           </div>
 
+          {/* The tease — count only, never which ones */}
+          {flagged !== null && (
+            <div className="mt-3 rounded-2xl p-5 flex items-center gap-4" style={{ background: "#0E1830", border: "1px solid #243354" }}>
+              <div
+                className="shrink-0 w-14 h-14 rounded-xl flex flex-col items-center justify-center"
+                style={{ background: TONE_BG[data.tone] || "#FEF3E2", color: TONE_FG[data.tone] || "#7A5700" }}
+              >
+                <span className="font-mono text-xl font-semibold leading-none">{flagged}</span>
+                <span className="font-mono text-[9px] mt-1 leading-none">of {MEASURE_TOTAL}</span>
+              </div>
+              <div className="flex-1">
+                <div className="text-sm text-white font-medium">
+                  {flagged === 0
+                    ? `No measures flagged out of ${MEASURE_TOTAL}`
+                    : `Flagged on ${flagged} of ${MEASURE_TOTAL} measures`}
+                </div>
+                <div className="text-xs mt-1" style={{ color: "#93A0B8" }}>
+                  {flagged === 0
+                    ? "Clean across the board on this year's published data — here's how to keep it that way."
+                    : "Each flag is a specific utilization pattern CMS scored you on."}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* The gate */}
           <div className="relative mt-3 rounded-2xl overflow-hidden" style={{ border: "1px solid #243354" }}>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-4" aria-hidden="true">
@@ -114,12 +184,16 @@ export default function CCNTeaser() {
             </div>
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6" style={{ background: "linear-gradient(180deg, rgba(14,24,48,0.55), rgba(14,24,48,0.92))" }}>
               <Lock size={18} color="#E8CFA0" />
-              <div className="text-sm text-white mt-2 font-medium">See exactly which of the 9 measures flagged you</div>
+              <div className="text-sm text-white mt-2 font-medium">
+                {flagged !== null && flagged > 0
+                  ? `See which ${flagged} flagged you — and how to fix them`
+                  : `See exactly which of the ${MEASURE_TOTAL} measures flagged you`}
+              </div>
               <div className="text-xs mt-1 max-w-xs" style={{ color: "#93A0B8" }}>
                 Your full breakdown, your values against each CMS threshold, and what to fix — inside your secure portal.
               </div>
               <Link href="/demo" className="mt-4 px-4 py-2 rounded-lg text-sm font-medium" style={{ background: "#B8863F", color: "#0E1830" }}>
-                Book a demo to unlock
+                Book a demo to see which ones
               </Link>
             </div>
           </div>
