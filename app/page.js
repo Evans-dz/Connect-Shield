@@ -46,7 +46,7 @@ export default function Home() {
                 CMS is scoring your hospice - Do you know your number?
               </h1>
               <p className="text-base md:text-lg mt-5 max-w-lg animate-fade-up" style={{ color: "#AEBAD0", animationDelay: "120ms" }}>
-                CMS now scores every hospice from 0 to 16 on nine claims-based measures. Connect Shield shows you your number, reads your own reports alongside it, and tells you exactly what to fix — securely, and built to HIPAA standards.
+                CMS now scores every hospice from 0 to 16 on nine claims-based measures. Connect Shield shows you your number, reads your own reports alongside it, and tells you exactly what to fix — securely, on encrypted, per-clinic isolated infrastructure.
               </p>
               <div className="flex flex-wrap gap-3 mt-7 animate-fade-up" style={{ animationDelay: "180ms" }}>
                 <Link href="/demo" className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-medium" style={{ background: "#B8863F", color: "#0E1830" }}>
@@ -57,7 +57,7 @@ export default function Home() {
                 </a>
               </div>
               <div className="flex items-center gap-2 mt-6 text-[12px] font-mono animate-fade-up" style={{ color: "#7C8AA8", animationDelay: "240ms" }}>
-                <ShieldCheck size={14} color="#B8863F" /> HIPAA-compliant · Encrypted, role-based access · Built on public CMS data
+                <ShieldCheck size={14} color="#B8863F" /> Encrypted · Per-clinic isolated access · Built on public CMS data
               </div>
             </div>
 
@@ -172,8 +172,8 @@ export default function Home() {
                   <th className="px-4 py-4 text-center" style={{ background: "#F7F0E1" }}>
                     <span className="font-display text-ink">Connect Shield</span>
                   </th>
-                  <th className="px-4 py-4 text-center font-mono text-[12px] text-slate">Hospice Engine</th>
-                  <th className="px-4 py-4 text-center font-mono text-[12px] text-slate">Hospice Shield</th>
+                  <th className="px-4 py-4 text-center font-mono text-[12px] text-slate">The Competition</th>
+                  <th className="px-4 py-4 text-center font-mono text-[12px] text-slate">Basic Tools</th>
                 </tr>
               </thead>
               <tbody>
@@ -199,7 +199,7 @@ export default function Home() {
         <div className="max-w-content mx-auto px-5 md:px-8 py-16">
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { icon: ShieldCheck, h: "HIPAA-compliant by design", p: "Connect Shield is built and operated to HIPAA standards. Your data is encrypted in transit and at rest, and we work from CMS agency-level data and the reports you upload." },
+              { icon: ShieldCheck, h: "Secure by design", p: "Connect Shield works from CMS agency-level data and the reports you upload — never patient names or diagnoses. Your data is encrypted in transit and at rest." },
               { icon: Lock, h: "Secure per-clinic access", p: "Each hospice gets its own portal with hashed credentials, encrypted sessions, and multi-factor authentication support." },
               { icon: Check, h: "Sourced straight from CMS", p: "SSVI figures come directly from the CMS-1851-P file. Every measure we show reconciles to your published score." },
             ].map((c, i) => {
