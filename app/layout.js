@@ -29,6 +29,9 @@ export const metadata = {
   },
   twitter: { card: "summary_large_image", title: "Connect Shield", description: SITE.description },
   robots: { index: true, follow: true },
+  verification: {
+    google: "o6__oB0owp-GspKxtcwcds71VKIM_U2PX9b7umhZ5ZM",
+  },
   alternates: { canonical: SITE.url },
 };
 
