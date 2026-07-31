@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 import { SITE } from '@/lib/site'
+import SSVIMap from '@/components/SSVIMap'
 
 const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -191,6 +192,21 @@ export default async function Page() {
               {rural.length.toLocaleString()} rural providers.
             </li>
           </ul>
+        </section>
+
+        {/* Map */}
+        <section className="mt-10">
+          <h2 className="text-xl font-semibold text-slate-900">
+            Average SSVI by state
+          </h2>
+          <p className="mt-3 text-slate-700">
+            Darker states have higher average scores. Shading is by rank rather
+            than raw value, so the differences stay visible across a narrow
+            range. Click any state to see its highest-scoring agencies.
+          </p>
+          <div className="mt-5">
+            <SSVIMap states={states} />
+          </div>
         </section>
 
         {/* Concentration */}
