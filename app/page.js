@@ -6,7 +6,7 @@ import { SITE, STATS, COMPETITORS, FAQ } from "@/lib/site";
 import { SOLUTIONS } from "@/lib/solutions";
 
 const PLATFORM = [
-  { icon: Search, title: "Published SSVI lookup", body: "Your exact CMS score for all 7,059 hospices, with every one of the nine measures broken down." },
+  { icon: Search, title: "Published SSVI lookup", body: "Your exact CMS score for all 6,643 scored hospices, with every one of the nine metrics broken down." },
   { icon: Activity, title: "PS&R risk drivers", body: "Upload Report 810 and get RN intensity, length of stay, and reimbursement calculated in seconds." },
   { icon: PieChart, title: "CAP exposure", body: "Turn your beneficiary count into a live aggregate-cap calculation with a clawback estimate." },
   { icon: FileText, title: "PEPPER & CAHPS", body: "Read your outlier target areas and survey scores against national thresholds, in plain terms." },
@@ -46,7 +46,7 @@ export default function Home() {
                 CMS is scoring your hospice - Do you know your number?
               </h1>
               <p className="text-base md:text-lg mt-5 max-w-lg animate-fade-up" style={{ color: "#AEBAD0", animationDelay: "120ms" }}>
-                CMS now scores every hospice from 0 to 16 on nine claims-based measures. Connect Shield shows you your number, reads your own reports alongside it, and tells you exactly what to fix — securely, on encrypted, per-clinic isolated infrastructure.
+                CMS now scores every hospice from 0 to 16 on nine claims-based metrics — eight utilization measures plus non-hospice spending. Connect Shield shows you your number, reads your own reports alongside it, and tells you exactly what to fix — securely, on encrypted, per-clinic isolated infrastructure.
               </p>
               <div className="flex flex-wrap gap-3 mt-7 animate-fade-up" style={{ animationDelay: "180ms" }}>
                 <Link href="/demo" className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-medium" style={{ background: "#B8863F", color: "#0E1830" }}>
@@ -110,6 +110,27 @@ export default function Home() {
             );
           })}
         </div>
+
+        <Reveal delay={120}>
+          <div className="mt-10 rounded-2xl bg-white p-6 md:p-7" style={{ border: "1px solid #E3E7ED" }}>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 className="font-display text-lg text-ink">Free: look up any hospice&apos;s SSVI score</h3>
+                <p className="text-sm text-slate mt-1.5 max-w-xl">
+                  Every Medicare-certified hospice has a public page with its full breakdown, both halves of the score, and national and state ranking. No signup.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link href="/hospice" className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium" style={{ background: "#B8863F", color: "#0E1830" }}>
+                  Browse all agencies <ArrowRight size={15} />
+                </Link>
+                <Link href="/hospice/ssvi-by-state" className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-ink" style={{ border: "1px solid #E3E7ED" }}>
+                  Read our state analysis
+                </Link>
+              </div>
+            </div>
+          </div>
+        </Reveal>
       </section>
 
       {/* ── MISSION ───────────────────────────────────────── */}
@@ -133,7 +154,7 @@ export default function Home() {
           <Reveal>
             <div className="eyebrow">Solutions</div>
             <h2 className="font-display text-ink mt-3" style={{ fontSize: "clamp(1.8rem, 3.4vw, 2.6rem)", lineHeight: 1.1 }}>
-              Built around the terms you're already searching.
+              Built around the terms you&apos;re already searching.
             </h2>
           </Reveal>
           <div className="grid md:grid-cols-2 gap-3 mt-12">
@@ -249,7 +270,7 @@ export default function Home() {
                 See your full compliance picture in one call.
               </h2>
               <p className="mt-4 max-w-lg mx-auto" style={{ color: "#AEBAD0" }}>
-                We'll set up your secure portal, load your CCN, and walk your team through exactly what's driving your score.
+                We&apos;ll set up your secure portal, load your CCN, and walk your team through exactly what&apos;s driving your score.
               </p>
               <Link href="/demo" className="inline-flex items-center gap-2 rounded-xl px-6 py-3.5 text-sm font-medium mt-7" style={{ background: "#B8863F", color: "#0E1830" }}>
                 Book a demo <ArrowRight size={16} />
