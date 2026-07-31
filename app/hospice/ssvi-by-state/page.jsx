@@ -65,6 +65,39 @@ function KeyStat({ label, value, sub }) {
   )
 }
 
+function CompositionCard({ title, note, items, half }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-6">
+      <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+        {title}
+      </h3>
+      <p className="mt-1 text-xs text-slate-500">{note}</p>
+      <ul className="mt-4 space-y-3">
+        {items.map((s) => (
+          <li key={s.code}>
+            <div className="flex items-baseline justify-between gap-3">
+              <Link
+                href={`/hospice/state/${s.code.toLowerCase()}`}
+                className="text-sm font-medium text-slate-900 hover:text-amber-700"
+              >
+                {s.code}
+              </Link>
+              <span className="text-sm tabular-nums text-slate-900">
+                {half === 'spend' ? s.spend.toFixed(1) : s.util.toFixed(1)}
+                <span className="text-slate-400"> / 8</span>
+              </span>
+            </div>
+            <div className="mt-1 text-xs tabular-nums text-slate-500">
+              {s.avg.toFixed(1)} total · spending {s.spend.toFixed(1)} ·
+              utilization {s.util.toFixed(1)}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 export default async function Page() {
   const rows = await fetchAll()
 
@@ -82,7 +115,7 @@ export default async function Page() {
   const distMax = Math.max(...dist)
   const topScore = dist.reduce((acc, n, i) => (n > 0 ? i : acc), 0)
 
-  // Spending score distribution — how many agencies max out at 8
+  // How many agencies max out each half
   const spendMaxed = rows.filter(
     (r) => Number(r.fy2025_spending_score) === 8
   ).length
@@ -90,6 +123,12 @@ export default async function Page() {
     (r) => Number(r.fy2025_utilization_score) === 8
   ).length
   const spendMaxedPct = Math.round((spendMaxed / rows.length) * 100)
+  const topUtil = Math.max(
+    ...rows.map((r) => Number(r.fy2025_utilization_score))
+  )
+  const topUtilCount = rows.filter(
+    (r) => Number(r.fy2025_utilization_score) === topUtil
+  ).length
 
   // Year over year
   const withBoth = rows.filter((r) => r.fy2024_total_ssvi !== null)
@@ -100,6 +139,7 @@ export default async function Page() {
     (r) => Number(r.fy2025_total_ssvi) < Number(r.fy2024_total_ssvi)
   ).length
   const same = withBoth.length - rose - fell
+  const movedPct = Math.round(((rose + fell) / withBoth.length) * 100)
 
   // Urban / rural
   const urban = rows.filter((r) => r.urban_rural === 'U')
@@ -130,12 +170,14 @@ export default async function Page() {
   const lowest = [...ranked].reverse().slice(0, 5)
   const biggest = [...states].sort((a, b) => b.count - a.count).slice(0, 5)
 
-  // Composition extremes — most spending-driven and most utilization-driven
-  const bySpendTilt = [...ranked].sort(
-    (a, b) => b.spend - b.util - (a.spend - a.util)
-  )
-  const spendTilted = bySpendTilt.slice(0, 3)
-  const utilTilted = [...bySpendTilt].reverse().slice(0, 3)
+  // Composition leaders — each sorted on its own axis, not on the gap
+  const topSpendStates = [...ranked]
+    .sort((a, b) => b.spend - a.spend)
+    .slice(0, 3)
+  const topUtilStates = [...ranked].sort((a, b) => b.util - a.util).slice(0, 3)
+
+  const spendLeader = topSpendStates[0]
+  const utilLeader = topUtilStates[0]
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -224,73 +266,55 @@ export default async function Page() {
             measures combined.
           </p>
           <p className="mt-4 leading-relaxed text-slate-700">
-            {spendMaxed.toLocaleString()} agencies &mdash; {spendMaxedPct}% of
-            everyone scored &mdash; sit at the maximum 8 on spending. Only{' '}
-            {utilMaxed.toLocaleString()} do on utilization. For most hospices,
-            the spending half is doing the work.
+            The ceilings tell the same story.{' '}
+            <strong className="font-semibold text-slate-900">
+              {spendMaxed.toLocaleString()} agencies
+            </strong>{' '}
+            &mdash; {spendMaxedPct}% of everyone scored &mdash; sit at the
+            maximum 8 on spending.{' '}
+            {utilMaxed === 0 ? (
+              <>
+                Not one agency in the country is flagged on all eight utilization
+                measures; the highest anyone reaches is {topUtil}, held by{' '}
+                {topUtilCount.toLocaleString()}{' '}
+                {topUtilCount === 1 ? 'agency' : 'agencies'}.
+              </>
+            ) : (
+              <>
+                Only {utilMaxed.toLocaleString()}{' '}
+                {utilMaxed === 1 ? 'agency reaches' : 'agencies reach'} 8 on
+                utilization.
+              </>
+            )}
           </p>
 
           <div className="mt-8 grid gap-6 sm:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-                Most spending-driven
-              </h3>
-              <p className="mt-1 text-xs text-slate-500">
-                Largest gap between spending and utilization averages
-              </p>
-              <ul className="mt-4 space-y-3">
-                {spendTilted.map((s) => (
-                  <li key={s.code}>
-                    <div className="flex items-baseline justify-between">
-                      <Link
-                        href={`/hospice/state/${s.code.toLowerCase()}`}
-                        className="text-sm font-medium text-slate-900 hover:text-amber-700"
-                      >
-                        {s.code}
-                      </Link>
-                      <span className="text-sm tabular-nums text-slate-600">
-                        {s.avg.toFixed(1)} total
-                      </span>
-                    </div>
-                    <div className="mt-1 text-xs tabular-nums text-slate-500">
-                      spending {s.spend.toFixed(1)} · utilization{' '}
-                      {s.util.toFixed(1)}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-                Most utilization-driven
-              </h3>
-              <p className="mt-1 text-xs text-slate-500">
-                Smallest gap between spending and utilization averages
-              </p>
-              <ul className="mt-4 space-y-3">
-                {utilTilted.map((s) => (
-                  <li key={s.code}>
-                    <div className="flex items-baseline justify-between">
-                      <Link
-                        href={`/hospice/state/${s.code.toLowerCase()}`}
-                        className="text-sm font-medium text-slate-900 hover:text-amber-700"
-                      >
-                        {s.code}
-                      </Link>
-                      <span className="text-sm tabular-nums text-slate-600">
-                        {s.avg.toFixed(1)} total
-                      </span>
-                    </div>
-                    <div className="mt-1 text-xs tabular-nums text-slate-500">
-                      spending {s.spend.toFixed(1)} · utilization{' '}
-                      {s.util.toFixed(1)}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <CompositionCard
+              title="Highest spending scores"
+              note="State averages, non-hospice spending half"
+              items={topSpendStates}
+              half="spend"
+            />
+            <CompositionCard
+              title="Highest utilization scores"
+              note="State averages, claims-based utilization half"
+              items={topUtilStates}
+              half="util"
+            />
           </div>
+
+          <p className="mt-6 leading-relaxed text-slate-700">
+            The two lists barely overlap. {spendLeader.code} leads on spending at{' '}
+            {spendLeader.spend.toFixed(1)} of 8 while posting only{' '}
+            {spendLeader.util.toFixed(1)} on utilization. {utilLeader.code} leads
+            on utilization at {utilLeader.util.toFixed(1)} with a spending score
+            of {utilLeader.spend.toFixed(1)}. Their totals differ by{' '}
+            {Math.abs(spendLeader.avg - utilLeader.avg).toFixed(1)}{' '}
+            {Math.abs(spendLeader.avg - utilLeader.avg) === 1
+              ? 'point'
+              : 'points'}
+            . The compositions are nothing alike.
+          </p>
 
           <div className="mt-8 rounded-xl border-l-4 border-amber-600 bg-white p-6 sm:p-7">
             <p className="leading-relaxed text-slate-800">
@@ -369,9 +393,8 @@ export default async function Page() {
             The SSVI is not a fixed label. Between FY2024 and FY2025,{' '}
             {rose.toLocaleString()} hospices saw their score rise,{' '}
             {fell.toLocaleString()} saw it fall, and {same.toLocaleString()}{' '}
-            stayed put &mdash; meaning roughly{' '}
-            {Math.round(((rose + fell) / withBoth.length) * 100)}% of agencies
-            moved in a single year.
+            stayed put &mdash; meaning roughly {movedPct}% of agencies moved in a
+            single year.
           </p>
           <p className="mt-4 leading-relaxed text-slate-700">
             Urban agencies average {urbanAvg.toFixed(1)} against{' '}
@@ -477,8 +500,8 @@ export default async function Page() {
             Every state and territory
           </h2>
           <p className="mt-4 leading-relaxed text-slate-700">
-            Sorted by average FY2025 SSVI, with each half shown separately.
-            Click any state for its full agency list.
+            Sorted by average FY2025 SSVI, with each half shown separately. Click
+            any state for its full agency list.
           </p>
 
           <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -551,12 +574,13 @@ export default async function Page() {
             Analysis by Connect Shield using the CMS SSVI data file published
             with CMS-1851-P. State figures are unweighted means across agencies
             with a FY2025 score; {rows.length.toLocaleString()} agencies had one,
-            and agencies without a score are excluded throughout. Year-over-year
-            comparisons use the {withBoth.length.toLocaleString()} agencies with
-            both a FY2024 and FY2025 score. The FY2027 rule was proposed, not
-            final, at the time of publication; figures reflect the SSVI data file
-            as released with the proposed rule. Connect Shield is not affiliated
-            with CMS.
+            and agencies without a score are excluded throughout. Composition
+            rankings include only states with at least {MIN_FOR_RANKING} scored
+            agencies. Year-over-year comparisons use the{' '}
+            {withBoth.length.toLocaleString()} agencies with both a FY2024 and
+            FY2025 score. The FY2027 rule was proposed, not final, at the time of
+            publication; figures reflect the SSVI data file as released with the
+            proposed rule. Connect Shield is not affiliated with CMS.
           </p>
         </section>
 
