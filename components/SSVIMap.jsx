@@ -13,7 +13,6 @@ const db = createClient(
 
 const ATLAS = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json'
 
-// FIPS id -> postal code
 const FIPS = {
   '01': 'AL', '02': 'AK', '04': 'AZ', '05': 'AR', '06': 'CA', '08': 'CO',
   '09': 'CT', '10': 'DE', '11': 'DC', '12': 'FL', '13': 'GA', '15': 'HI',
@@ -45,24 +44,23 @@ const NAMES = {
   MP: 'Northern Mariana Islands', AS: 'American Samoa',
 }
 
-// Small states get a leader line out to a labeled box.
-// [boxX, boxY] in viewBox coordinates.
-const SMALL = {
-  VT: [812, 96],
-  NH: [812, 122],
-  MA: [812, 148],
-  RI: [812, 174],
-  CT: [812, 200],
-  NJ: [812, 226],
-  DE: [812, 252],
-  MD: [812, 278],
-  DC: [812, 304],
-}
+// Map occupies MAP_W; labels live in the gutter to its right.
+const MAP_W = 960
+const MAP_H = 600
+const GUTTER_X = 990
+const VIEW_W = 1160
+const BOX_W = 66
+const BOX_H = 22
 
-const W = 960
-const H = 600
-const BOX_W = 62
-const BOX_H = 20
+// Order matters — these stack top to bottom in the gutter.
+const SMALL_ORDER = ['VT', 'NH', 'MA', 'RI', 'CT', 'NJ', 'DE', 'MD', 'DC']
+const STACK_TOP = 108
+const STACK_GAP = 30
+
+const SMALL = {}
+SMALL_ORDER.forEach((code, i) => {
+  SMALL[code] = [GUTTER_X, STACK_TOP + i * STACK_GAP]
+})
 
 const RAMP = ['#FDF8F1', '#F3E3C9', '#E3C08D', '#CB9A57', '#AE7B36', '#84592A']
 
@@ -73,23 +71,24 @@ export default function SSVIMap({ states }) {
     return m
   }, [states])
 
-  const scored = useMemo(
-    () => states.filter((s) => s.avg != null).map((s) => s.avg),
+  const mappedScored = useMemo(
+    () =>
+      states
+        .filter((s) => s.avg != null && MAPPED.has(s.code))
+        .map((s) => s.avg),
     [states]
   )
-  const lo = scored.length ? Math.min(...scored) : 0
-  const hi = scored.length ? Math.max(...scored) : 16
+  const lo = mappedScored.length ? Math.min(...mappedScored) : 0
+  const hi = mappedScored.length ? Math.max(...mappedScored) : 16
 
-  // Quantile breaks — a linear ramp over a ~4 point spread makes everything
-  // look identical, so bucket by rank instead.
   const breaks = useMemo(() => {
-    const sorted = [...scored].sort((a, b) => a - b)
+    const sorted = [...mappedScored].sort((a, b) => a - b)
     const out = []
     for (let i = 1; i < RAMP.length; i++) {
       out.push(sorted[Math.floor((i / RAMP.length) * sorted.length)])
     }
     return out
-  }, [scored])
+  }, [mappedScored])
 
   function bucket(code) {
     const s = byCode[code]
@@ -135,7 +134,7 @@ export default function SSVIMap({ states }) {
 
   const { paths, centroids } = useMemo(() => {
     if (!geo) return { paths: [], centroids: {} }
-    const proj = geoAlbersUsa().fitSize([W, H], geo)
+    const proj = geoAlbersUsa().fitSize([MAP_W, MAP_H], geo)
     const path = geoPath(proj)
     const p = []
     const c = {}
@@ -194,7 +193,7 @@ export default function SSVIMap({ states }) {
         {geo && (
           <div className="relative">
             <svg
-              viewBox={`0 0 ${W} ${H}`}
+              viewBox={`0 0 ${VIEW_W} ${MAP_H}`}
               className="w-full"
               role="img"
               aria-label="United States map colored by average hospice SSVI score"
@@ -217,7 +216,6 @@ export default function SSVIMap({ states }) {
                 )
               })}
 
-              {/* Inline labels for states big enough to hold them */}
               {paths.map(({ code }) => {
                 if (SMALL[code]) return null
                 const ct = centroids[code]
@@ -249,11 +247,12 @@ export default function SSVIMap({ states }) {
                 )
               })}
 
-              {/* Leader lines + boxes for the small eastern states */}
-              {Object.entries(SMALL).map(([code, [bx, by]]) => {
+              {SMALL_ORDER.map((code) => {
+                const pos = SMALL[code]
                 const ct = centroids[code]
                 const s = byCode[code]
-                if (!ct || !s || s.avg == null) return null
+                if (!pos || !ct || !s || s.avg == null) return null
+                const [bx, by] = pos
                 const isOn = active === code
                 return (
                   <g key={`sm-${code}`}>
@@ -265,7 +264,7 @@ export default function SSVIMap({ states }) {
                       stroke="#CBD5E1"
                       strokeWidth="1"
                     />
-                    <circle cx={ct[0]} cy={ct[1]} r="1.8" fill="#94A3B8" />
+                    <circle cx={ct[0]} cy={ct[1]} r="2" fill="#94A3B8" />
                     <rect
                       x={bx}
                       y={by - BOX_H / 2}
@@ -284,7 +283,7 @@ export default function SSVIMap({ states }) {
                       x={bx + BOX_W / 2}
                       y={by + 4}
                       textAnchor="middle"
-                      fontSize="10"
+                      fontSize="11"
                       fontWeight="600"
                       fill={inkFor(code)}
                       pointerEvents="none"
