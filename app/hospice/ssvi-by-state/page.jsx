@@ -47,8 +47,9 @@ export default async function Page() {
   const nationalAvg = mean(rows.map((r) => r.fy2025_total_ssvi))
   const nationalSpend = mean(rows.map((r) => r.fy2025_spending_score))
   const nationalUtil = mean(rows.map((r) => r.fy2025_utilization_score))
+  const spendShare = Math.round((nationalSpend / nationalAvg) * 100)
 
-  // Score distribution 0–16
+  // Score distribution 0-16
   const dist = Array.from({ length: 17 }, () => 0)
   for (const r of rows) {
     const v = Math.round(Number(r.fy2025_total_ssvi))
@@ -144,17 +145,23 @@ export default async function Page() {
               <strong className="font-semibold text-slate-900">
                 {nationalAvg.toFixed(1)} of 16
               </strong>
-              , split roughly evenly between a {nationalSpend.toFixed(1)}{' '}
-              average spending score and a {nationalUtil.toFixed(1)} average
-              utilization score.
+              . It is not split evenly: non-hospice spending contributes{' '}
+              <strong className="font-semibold text-slate-900">
+                {nationalSpend.toFixed(1)} points
+              </strong>{' '}
+              on average against{' '}
+              <strong className="font-semibold text-slate-900">
+                {nationalUtil.toFixed(1)}
+              </strong>{' '}
+              from utilization — roughly {spendShare}% of the typical score comes
+              from the spending half alone.
             </li>
             <li>
               <strong className="font-semibold text-slate-900">
                 No hospice in the country scored a 16.
               </strong>{' '}
               The highest score in the data is {topScore}, held by{' '}
-              {dist[topScore]}{' '}
-              {dist[topScore] === 1 ? 'agency' : 'agencies'}.
+              {dist[topScore]} {dist[topScore] === 1 ? 'agency' : 'agencies'}.
             </li>
             <li>
               State averages range from{' '}
@@ -218,11 +225,12 @@ export default async function Page() {
           </div>
 
           <p className="mt-5 text-slate-700">
-            Market structure explains much of this. States with certificate-of-need
-            laws for hospice restrict how many agencies can operate; states without
-            them do not. The result is that population is a poor predictor of how
-            many hospices a state has, and comparing raw counts between states with
-            different regulatory regimes is misleading.
+            Market structure explains much of this. States with
+            certificate-of-need laws for hospice restrict how many agencies can
+            operate; states without them do not. The result is that population
+            is a poor predictor of how many hospices a state has, and comparing
+            raw counts between states with different regulatory regimes is
+            misleading.
           </p>
         </section>
 
@@ -233,8 +241,8 @@ export default async function Page() {
           </h2>
           <p className="mt-3 text-slate-700">
             Scores cluster in the middle. The tails are thin in both directions —
-            very few hospices are clean across the board, and very few are flagged
-            on nearly everything.
+            very few hospices are clean across the board, and very few are
+            flagged on nearly everything.
           </p>
 
           <div className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
@@ -259,7 +267,7 @@ export default async function Page() {
               ))}
             </div>
             <p className="mt-4 text-xs text-slate-500">
-              FY2025 SSVI score (0–16) by number of agencies.
+              FY2025 SSVI score (0&ndash;16) by number of agencies.
             </p>
           </div>
         </section>
@@ -280,7 +288,7 @@ export default async function Page() {
                     {i + 1}. {s.code}
                   </Link>
                   <span className="text-sm tabular-nums text-slate-600">
-                    {s.avg.toFixed(1)} · {s.count} agencies
+                    {s.avg.toFixed(1)} · {s.count.toLocaleString()} agencies
                   </span>
                 </li>
               ))}
@@ -301,7 +309,7 @@ export default async function Page() {
                     {i + 1}. {s.code}
                   </Link>
                   <span className="text-sm tabular-nums text-slate-600">
-                    {s.avg.toFixed(1)} · {s.count} agencies
+                    {s.avg.toFixed(1)} · {s.count.toLocaleString()} agencies
                   </span>
                 </li>
               ))}
@@ -317,7 +325,7 @@ export default async function Page() {
         {/* Full table */}
         <section className="mt-10">
           <h2 className="text-xl font-semibold text-slate-900">
-            Every state, ranked
+            Every state and territory, ranked
           </h2>
           <p className="mt-3 text-slate-700">
             Sorted by average FY2025 SSVI. Click any state for the full list of
@@ -373,16 +381,16 @@ export default async function Page() {
             About the SSVI
           </h2>
           <p className="mt-3 text-slate-700">
-            The Service and Spending Variation Index is a 0–16 score CMS
+            The Service and Spending Variation Index is a 0&ndash;16 score CMS
             introduced in the FY2027 hospice wage index proposed rule
-            (CMS-1851-P). It combines a 0–8 non-hospice spending score, based on
-            Medicare spending outside the hospice benefit for an agency&apos;s
-            enrolled beneficiaries, with a 0–8 utilization score built from eight
-            claims-based measures — live discharge rate, length of stay over 180
-            days, nursing facility patient share, absence of continuous home care
-            or general inpatient care, visits in the last two days of life,
-            skilled nursing minutes, weekend visit rate, and return to hospice
-            within seven days.
+            (CMS-1851-P). It combines a 0&ndash;8 non-hospice spending score,
+            based on Medicare spending outside the hospice benefit for an
+            agency&apos;s enrolled beneficiaries, with a 0&ndash;8 utilization
+            score built from eight claims-based measures &mdash; live discharge
+            rate, length of stay over 180 days, nursing facility patient share,
+            absence of continuous home care or general inpatient care, visits in
+            the last two days of life, skilled nursing minutes, weekend visit
+            rate, and return to hospice within seven days.
           </p>
           <p className="mt-4 text-slate-700">
             A higher score means an agency&apos;s claims patterns diverge further
