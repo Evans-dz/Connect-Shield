@@ -75,7 +75,11 @@ export default async function Page({ params }) {
 
   const flagged = MEASURES.filter(([k]) => a[k] === true).length
   const change = a.ssvi_change
-  const pct = Math.round((Number(a.fy2025_total_ssvi) / 16) * 100)
+
+  const hasPct = a.pct_national !== null && a.pct_national !== undefined
+  const barPct = hasPct
+    ? Number(a.pct_national)
+    : (Number(a.fy2025_total_ssvi) / 16) * 100
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -97,7 +101,7 @@ export default async function Page({ params }) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <main className="mx-auto max-w-4xl px-5 py-10 sm:px-6 sm:py-14">
+      <div className="mx-auto max-w-4xl px-5 py-10 sm:px-6 sm:py-14">
         <nav className="mb-8 text-sm text-slate-500">
           <Link href="/hospice" className="hover:text-slate-900">
             Hospice SSVI Scores
@@ -142,9 +146,14 @@ export default async function Page({ params }) {
             <div className="mt-6 h-2 w-full overflow-hidden rounded-full bg-slate-100">
               <div
                 className="h-full rounded-full bg-amber-700"
-                style={{ width: `${pct}%` }}
+                style={{ width: `${barPct}%` }}
               />
             </div>
+            {hasPct && (
+              <p className="mt-2 text-xs text-slate-500">
+                Bar shows national percentile, not raw score.
+              </p>
+            )}
 
             <p className="mt-6 text-slate-700">
               Ranked{' '}
@@ -157,12 +166,12 @@ export default async function Page({ params }) {
                   {' '}
                   and{' '}
                   <strong className="font-semibold text-slate-900">
-                    {a.rank_state} of {a.n_state}
+                    {a.rank_state} of {a.n_state?.toLocaleString()}
                   </strong>{' '}
                   in {a.state}
                 </>
               ) : null}
-              . Higher than {a.pct_national}% of hospices nationally.
+              {hasPct ? `. Higher than ${a.pct_national}% of hospices nationally.` : '.'}
             </p>
           </div>
 
@@ -190,7 +199,7 @@ export default async function Page({ params }) {
                 vs FY2024
               </div>
               <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">
-                {change === null
+                {change === null || change === undefined
                   ? '—'
                   : change > 0
                   ? `+${change}`
@@ -247,13 +256,14 @@ export default async function Page({ params }) {
               value={`${a.fy2025_spending_score} / 8`}
               sub="Based on Medicare spending outside the hospice benefit"
             />
-            {a.fy2025_spending_per_day !== null && (
-              <Stat
-                label="Non-hospice spending per day"
-                value={`$${Number(a.fy2025_spending_per_day).toFixed(2)}`}
-                sub="FY2025"
-              />
-            )}
+            {a.fy2025_spending_per_day !== null &&
+              a.fy2025_spending_per_day !== undefined && (
+                <Stat
+                  label="Non-hospice spending per day"
+                  value={`$${Number(a.fy2025_spending_per_day).toFixed(2)}`}
+                  sub="FY2025"
+                />
+              )}
           </div>
         </section>
 
@@ -290,14 +300,16 @@ export default async function Page({ params }) {
               Book a demo
             </Link>
             <Link
-              href={a.state ? `/hospice/state/${a.state.toLowerCase()}` : '/hospice'}
+              href={
+                a.state ? `/hospice/state/${a.state.toLowerCase()}` : '/hospice'
+              }
               className="rounded-lg border border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800"
             >
               {a.state ? `See all ${a.state} hospices` : 'Browse all states'}
             </Link>
           </div>
         </section>
-      </main>
+      </div>
     </div>
   )
 }
