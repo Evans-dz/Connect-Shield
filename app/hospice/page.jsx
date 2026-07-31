@@ -53,11 +53,11 @@ export default async function Page() {
           Hospice SSVI Scores
         </h1>
         <p className="mt-4 text-slate-700">
-          The Service and Spending Variation Index is a 0–16 score CMS
-          introduced in the FY2027 hospice proposed rule. It combines a 0–8
-          non-hospice spending score with a 0–8 utilization score built from
-          eight claims-based measures. CMS calculated one for every
-          Medicare-certified hospice in the country.
+          The Service and Spending Variation Index is a 0&ndash;16 score CMS
+          introduced in the FY2027 hospice proposed rule. It combines a
+          0&ndash;8 non-hospice spending score with a 0&ndash;8 utilization
+          score built from eight claims-based measures. CMS calculated one for
+          every Medicare-certified hospice in the country.
         </p>
         <p className="mt-3 text-sm text-slate-500">
           {rows.length.toLocaleString()} agencies · national average FY2025 SSVI{' '}
@@ -68,7 +68,16 @@ export default async function Page() {
           <SSVILookup />
         </div>
 
-        <h2 className="mt-12 text-lg font-semibold text-slate-900">
+        <p className="mt-10">
+          <Link
+            href="/hospice/ssvi-by-state"
+            className="font-medium text-amber-700 hover:underline"
+          >
+            Read our analysis: SSVI scores across all 50 states &rarr;
+          </Link>
+        </p>
+
+        <h2 className="mt-8 text-lg font-semibold text-slate-900">
           Browse by state
         </h2>
         <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3 lg:grid-cols-4">
@@ -80,7 +89,8 @@ export default async function Page() {
             >
               <div className="text-sm font-semibold text-slate-900">{s}</div>
               <div className="mt-0.5 text-xs text-slate-500">
-                {byState[s].count} agencies · avg{' '}
+                {byState[s].count.toLocaleString()}{' '}
+                {byState[s].count === 1 ? 'agency' : 'agencies'} · avg{' '}
                 {(byState[s].total / byState[s].count).toFixed(1)}
               </div>
             </Link>
