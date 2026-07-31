@@ -22,7 +22,9 @@ async function fetchAll(columns, state) {
       .from('ssvi_public')
       .select(columns)
       .not('fy2025_total_ssvi', 'is', null)
-    if (state) q = q.eq('state', state).order('fy2025_total_ssvi', { ascending: false })
+    if (state) {
+      q = q.eq('state', state).order('fy2025_total_ssvi', { ascending: false })
+    }
     const { data, error } = await q.range(i * PAGE, i * PAGE + PAGE - 1)
     if (error || !data || data.length === 0) break
     rows.push(...data)
@@ -59,7 +61,7 @@ export default async function Page({ params }) {
 
   return (
     <div className="bg-slate-50">
-      <main className="mx-auto max-w-5xl px-5 py-10 sm:px-6 sm:py-14">
+      <div className="mx-auto max-w-5xl px-5 py-10 sm:px-6 sm:py-14">
         <nav className="mb-8 text-sm text-slate-500">
           <Link href="/hospice" className="hover:text-slate-900">
             Hospice SSVI Scores
@@ -72,8 +74,11 @@ export default async function Page({ params }) {
           Hospice SSVI Scores in {st}
         </h1>
         <p className="mt-3 text-slate-600">
-          {data.length.toLocaleString()} Medicare-certified hospices · average
-          FY2025 SSVI {avg} of 16
+          {data.length.toLocaleString()}{' '}
+          {data.length === 1
+            ? 'Medicare-certified hospice'
+            : 'Medicare-certified hospices'}{' '}
+          · average FY2025 SSVI {avg} of 16
         </p>
 
         <div className="mt-8 overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -111,7 +116,7 @@ export default async function Page({ params }) {
                       {r.fy2025_utilization_score}
                     </td>
                     <td className="px-5 py-3 text-right tabular-nums text-slate-600">
-                      {r.ssvi_change === null
+                      {r.ssvi_change === null || r.ssvi_change === undefined
                         ? '—'
                         : r.ssvi_change > 0
                         ? `+${r.ssvi_change}`
@@ -130,7 +135,7 @@ export default async function Page({ params }) {
           norms. Source: CMS FY2027 Hospice Wage Index Proposed Rule
           (CMS-1851-P).
         </p>
-      </main>
+      </div>
     </div>
   )
 }
