@@ -46,6 +46,12 @@ export default async function sitemap() {
       changeFrequency: "weekly",
       priority: 0.9,
     },
+    {
+      url: `${SITE.url}/hospice/ssvi-by-state`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.9,
+    },
   ];
 
   const statePages = states.map((s) => ({
