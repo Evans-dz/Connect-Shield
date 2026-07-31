@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { geoAlbersUsa, geoPath } from 'd3-geo'
+import { feature } from 'topojson-client'
 import { createClient } from '@supabase/supabase-js'
 
 const db = createClient(
@@ -9,20 +11,19 @@ const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 )
 
-// [col, row] on an 11 x 8 grid. Schematic, not geographic.
-const GRID = {
-  AK: [0, 0], ME: [10, 0],
-  VT: [9, 1], NH: [10, 1],
-  WA: [0, 2], ID: [1, 2], MT: [2, 2], ND: [3, 2], MN: [4, 2],
-  IL: [5, 2], WI: [6, 2], MI: [7, 2], NY: [9, 2], MA: [10, 2],
-  OR: [0, 3], NV: [1, 3], WY: [2, 3], SD: [3, 3], IA: [4, 3],
-  IN: [5, 3], OH: [6, 3], PA: [7, 3], NJ: [8, 3], CT: [9, 3], RI: [10, 3],
-  CA: [0, 4], UT: [1, 4], CO: [2, 4], NE: [3, 4], MO: [4, 4],
-  KY: [5, 4], WV: [6, 4], VA: [7, 4], MD: [8, 4], DE: [9, 4],
-  AZ: [1, 5], NM: [2, 5], KS: [3, 5], AR: [4, 5], TN: [5, 5],
-  NC: [6, 5], SC: [7, 5], DC: [8, 5],
-  OK: [3, 6], LA: [4, 6], MS: [5, 6], AL: [6, 6], GA: [7, 6],
-  HI: [0, 7], TX: [3, 7], FL: [8, 7],
+const ATLAS = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json'
+
+// FIPS -> postal code
+const FIPS = {
+  '01': 'AL', '02': 'AK', '04': 'AZ', '05': 'AR', '06': 'CA', '08': 'CO',
+  '09': 'CT', '10': 'DE', '11': 'DC', '12': 'FL', '13': 'GA', '15': 'HI',
+  '16': 'ID', '17': 'IL', '18': 'IN', '19': 'IA', '20': 'KS', '21': 'KY',
+  '22': 'LA', '23': 'ME', '24': 'MD', '25': 'MA', '26': 'MI', '27': 'MN',
+  '28': 'MS', '29': 'MO', '30': 'MT', '31': 'NE', '32': 'NV', '33': 'NH',
+  '34': 'NJ', '35': 'NM', '36': 'NY', '37': 'NC', '38': 'ND', '39': 'OH',
+  '40': 'OK', '41': 'OR', '42': 'PA', '44': 'RI', '45': 'SC', '46': 'SD',
+  '47': 'TN', '48': 'TX', '49': 'UT', '50': 'VT', '51': 'VA', '53': 'WA',
+  '54': 'WV', '55': 'WI', '56': 'WY', '72': 'PR',
 }
 
 const NAMES = {
@@ -42,43 +43,97 @@ const NAMES = {
   MP: 'Northern Mariana Islands', AS: 'American Samoa',
 }
 
-const CELL = 62
-const GAP = 6
-const COLS = 11
-const ROWS = 8
-
-// Sequential bronze ramp, light to dark
-const RAMP = ['#FDF8F1', '#F5E6CF', '#E8C89B', '#D4A469', '#B8863F', '#8F6530']
-
-function colorFor(avg, min, max) {
-  if (avg == null) return '#F1F5F9'
-  const span = max - min || 1
-  const t = (avg - min) / span
-  const i = Math.min(RAMP.length - 1, Math.floor(t * RAMP.length))
-  return RAMP[i]
+// Small states that need a leader line + outside label
+const SMALL = {
+  DC: [640, 300], DE: [648, 268], MD: [656, 240], RI: [672, 176],
+  CT: [672, 204], NJ: [668, 212], MA: [676, 148], NH: [664, 120],
+  VT: [640, 112],
 }
 
-function textFor(avg, min, max) {
-  if (avg == null) return '#94A3B8'
-  const span = max - min || 1
-  return (avg - min) / span > 0.55 ? '#FFFFFF' : '#44403C'
-}
+const W = 960
+const H = 600
+
+const RAMP = ['#FDF8F1', '#F3E3C9', '#E3C08D', '#CB9A57', '#AE7B36', '#84592A']
 
 export default function SSVIMap({ states }) {
-  const byCode = {}
-  for (const s of states) byCode[s.code] = s
+  const byCode = useMemo(() => {
+    const m = {}
+    for (const s of states) m[s.code] = s
+    return m
+  }, [states])
 
   const scored = states.filter((s) => s.avg != null).map((s) => s.avg)
-  const min = Math.min(...scored)
-  const max = Math.max(...scored)
+  const lo = Math.min(...scored)
+  const hi = Math.max(...scored)
 
+  // Quantile breaks so the ramp actually separates states
+  const breaks = useMemo(() => {
+    const sorted = [...scored].sort((a, b) => a - b)
+    const n = RAMP.length
+    const out = []
+    for (let i = 1; i < n; i++) {
+      out.push(sorted[Math.floor((i / n) * sorted.length)])
+    }
+    return out
+  }, [scored])
+
+  function fillFor(code) {
+    const s = byCode[code]
+    if (!s || s.avg == null) return '#F1F5F9'
+    let i = 0
+    while (i < breaks.length && s.avg >= breaks[i]) i++
+    return RAMP[i]
+  }
+
+  function inkFor(code) {
+    const s = byCode[code]
+    if (!s || s.avg == null) return '#94A3B8'
+    let i = 0
+    while (i < breaks.length && s.avg >= breaks[i]) i++
+    return i >= 4 ? '#FFFFFF' : '#44403C'
+  }
+
+  const [geo, setGeo] = useState(null)
+  const [err, setErr] = useState(false)
   const [active, setActive] = useState(null)
+  const [hover, setHover] = useState(null)
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
 
-  const territories = states.filter((s) => !GRID[s.code])
+  useEffect(() => {
+    let dead = false
+    fetch(ATLAS)
+      .then((r) => r.json())
+      .then((topo) => {
+        if (dead) return
+        setGeo(feature(topo, topo.objects.states))
+      })
+      .catch(() => !dead && setErr(true))
+    return () => {
+      dead = true
+    }
+  }, [])
+
+  const { paths, centroids } = useMemo(() => {
+    if (!geo) return { paths: [], centroids: {} }
+    const proj = geoAlbersUsa().fitSize([W, H], geo)
+    const path = geoPath(proj)
+    const p = []
+    const c = {}
+    for (const f of geo.features) {
+      const code = FIPS[f.id]
+      if (!code) continue
+      const d = path(f)
+      if (!d) continue
+      p.push({ code, d })
+      const ct = path.centroid(f)
+      if (ct && !Number.isNaN(ct[0])) c[code] = ct
+    }
+    return { paths: p, centroids: c }
+  }, [geo])
 
   async function pick(code) {
+    if (!byCode[code]) return
     if (active === code) {
       setActive(null)
       setRows([])
@@ -99,71 +154,162 @@ export default function SSVIMap({ states }) {
   }
 
   const sel = active ? byCode[active] : null
+  const tip = hover ? byCode[hover] : null
+  const territories = states.filter((s) => !FIPS_HAS(s.code))
+
+  function FIPS_HAS(code) {
+    return Object.values(FIPS).includes(code)
+  }
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
-        <svg
-          viewBox={`0 0 ${COLS * (CELL + GAP)} ${ROWS * (CELL + GAP)}`}
-          className="w-full"
-          style={{ minWidth: 620 }}
-          role="img"
-          aria-label="US states colored by average hospice SSVI score"
-        >
-          {Object.entries(GRID).map(([code, [c, r]]) => {
-            const s = byCode[code]
-            const avg = s ? s.avg : null
-            const isActive = active === code
-            return (
-              <g
-                key={code}
-                onClick={() => s && pick(code)}
-                style={{ cursor: s ? 'pointer' : 'default' }}
-              >
-                <rect
-                  x={c * (CELL + GAP)}
-                  y={r * (CELL + GAP)}
-                  width={CELL}
-                  height={CELL}
-                  rx="6"
-                  fill={colorFor(avg, min, max)}
-                  stroke={isActive ? '#0F172A' : '#E2E8F0'}
-                  strokeWidth={isActive ? 2.5 : 1}
-                />
-                <text
-                  x={c * (CELL + GAP) + CELL / 2}
-                  y={r * (CELL + GAP) + CELL / 2 - 4}
-                  textAnchor="middle"
-                  fontSize="15"
-                  fontWeight="600"
-                  fill={textFor(avg, min, max)}
-                >
-                  {code}
-                </text>
-                <text
-                  x={c * (CELL + GAP) + CELL / 2}
-                  y={r * (CELL + GAP) + CELL / 2 + 14}
-                  textAnchor="middle"
-                  fontSize="12"
-                  fill={textFor(avg, min, max)}
-                  opacity="0.85"
-                >
-                  {avg == null ? '—' : avg.toFixed(1)}
-                </text>
-              </g>
-            )
-          })}
-        </svg>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
+        {err && (
+          <div className="py-10 text-center text-sm text-slate-500">
+            Map could not load. Use the table below.
+          </div>
+        )}
 
-        {/* Legend */}
+        {!geo && !err && (
+          <div className="py-16 text-center text-sm text-slate-400">
+            Loading map…
+          </div>
+        )}
+
+        {geo && (
+          <div className="relative">
+            <svg
+              viewBox={`0 0 ${W} ${H}`}
+              className="w-full"
+              role="img"
+              aria-label="United States map colored by average hospice SSVI score"
+            >
+              {paths.map(({ code, d }) => {
+                const has = !!byCode[code]
+                const isOn = active === code
+                return (
+                  <path
+                    key={code}
+                    d={d}
+                    fill={fillFor(code)}
+                    stroke={isOn ? '#0F172A' : '#FFFFFF'}
+                    strokeWidth={isOn ? 2 : 0.75}
+                    onClick={() => pick(code)}
+                    onMouseEnter={() => setHover(code)}
+                    onMouseLeave={() => setHover(null)}
+                    style={{ cursor: has ? 'pointer' : 'default' }}
+                  />
+                )
+              })}
+
+              {/* Labels inside larger states */}
+              {paths.map(({ code }) => {
+                if (SMALL[code]) return null
+                const ct = centroids[code]
+                const s = byCode[code]
+                if (!ct || !s) return null
+                return (
+                  <g key={`l-${code}`} pointerEvents="none">
+                    <text
+                      x={ct[0]}
+                      y={ct[1] - 2}
+                      textAnchor="middle"
+                      fontSize="11"
+                      fontWeight="600"
+                      fill={inkFor(code)}
+                    >
+                      {code}
+                    </text>
+                    <text
+                      x={ct[0]}
+                      y={ct[1] + 10}
+                      textAnchor="middle"
+                      fontSize="10"
+                      fill={inkFor(code)}
+                      opacity="0.85"
+                    >
+                      {s.avg.toFixed(1)}
+                    </text>
+                  </g>
+                )
+              })}
+
+              {/* Leader lines for small states */}
+              {Object.entries(SMALL).map(([code, [lx, ly]]) => {
+                const ct = centroids[code]
+                const s = byCode[code]
+                if (!ct || !s) return null
+                return (
+                  <g key={`s-${code}`}>
+                    <line
+                      x1={ct[0]}
+                      y1={ct[1]}
+                      x2={lx - 4}
+                      y2={ly - 4}
+                      stroke="#CBD5E1"
+                      strokeWidth="1"
+                    />
+                    <rect
+                      x={lx}
+                      y={ly - 14}
+                      width="54"
+                      height="20"
+                      rx="4"
+                      fill={fillFor(code)}
+                      stroke={active === code ? '#0F172A' : '#E2E8F0'}
+                      strokeWidth={active === code ? 2 : 1}
+                      onClick={() => pick(code)}
+                      onMouseEnter={() => setHover(code)}
+                      onMouseLeave={() => setHover(null)}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <text
+                      x={lx + 27}
+                      y={ly}
+                      textAnchor="middle"
+                      fontSize="10"
+                      fontWeight="600"
+                      fill={inkFor(code)}
+                      pointerEvents="none"
+                    >
+                      {code} {s.avg.toFixed(1)}
+                    </text>
+                  </g>
+                )
+              })}
+            </svg>
+
+            {tip && (
+              <div className="pointer-events-none absolute left-3 top-3 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                <div className="text-sm font-semibold text-slate-900">
+                  {NAMES[hover] || hover}
+                </div>
+                <div className="mt-0.5 text-xs text-slate-600">
+                  {tip.count.toLocaleString()}{' '}
+                  {tip.count === 1 ? 'agency' : 'agencies'} · avg{' '}
+                  {tip.avg.toFixed(1)} of 16
+                </div>
+                <div className="mt-0.5 text-xs text-slate-500">
+                  spending {tip.spend.toFixed(1)} · utilization{' '}
+                  {tip.util.toFixed(1)}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-          <span>Lower</span>
+          <span>{lo.toFixed(1)}</span>
           <div className="flex">
             {RAMP.map((c) => (
-              <div key={c} className="h-3 w-8" style={{ background: c }} />
+              <div
+                key={c}
+                className="h-3 w-8 border border-white"
+                style={{ background: c }}
+              />
             ))}
           </div>
-          <span>Higher average SSVI</span>
+          <span>{hi.toFixed(1)}</span>
           <span className="ml-auto">Click a state to see its agencies</span>
         </div>
 
@@ -179,8 +325,8 @@ export default function SSVIMap({ states }) {
                   onClick={() => pick(s.code)}
                   className="rounded-lg border px-3 py-2 text-sm"
                   style={{
-                    background: colorFor(s.avg, min, max),
-                    color: textFor(s.avg, min, max),
+                    background: fillFor(s.code),
+                    color: inkFor(s.code),
                     borderColor: active === s.code ? '#0F172A' : '#E2E8F0',
                   }}
                 >
@@ -195,7 +341,6 @@ export default function SSVIMap({ states }) {
         )}
       </div>
 
-      {/* Detail panel */}
       {sel && (
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
@@ -204,7 +349,8 @@ export default function SSVIMap({ states }) {
                 {NAMES[sel.code] || sel.code}
               </h3>
               <p className="mt-1 text-sm text-slate-600">
-                {sel.count.toLocaleString()} agencies · average{' '}
+                {sel.count.toLocaleString()}{' '}
+                {sel.count === 1 ? 'agency' : 'agencies'} · average{' '}
                 {sel.avg.toFixed(1)} of 16 · spending {sel.spend.toFixed(1)} ·
                 utilization {sel.util.toFixed(1)}
               </p>
@@ -213,7 +359,7 @@ export default function SSVIMap({ states }) {
               href={`/hospice/state/${sel.code.toLowerCase()}`}
               className="text-sm font-medium text-amber-700 hover:underline"
             >
-              See all {sel.count.toLocaleString()} →
+              See all {sel.count.toLocaleString()} &rarr;
             </Link>
           </div>
 
