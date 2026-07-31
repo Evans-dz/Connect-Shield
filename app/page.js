@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Check, Minus, ShieldCheck, FileText, PieChart, Search, Activity, BookOpen, Bot, Lock } from "lucide-react";
+import { ArrowRight, Check, ShieldCheck, FileText, PieChart, Search, Activity, BookOpen, Bot, Lock } from "lucide-react";
 import Reveal from "@/components/Reveal";
 import CCNTeaser from "@/components/CCNTeaser";
 import { SITE, STATS, COMPETITORS, FAQ } from "@/lib/site";
@@ -13,12 +13,6 @@ const PLATFORM = [
   { icon: BookOpen, title: "Survey & CoP auditor", body: "Track deficiencies and audit charts against the Medicare Conditions of Participation." },
   { icon: Bot, title: "Atlas assistant", body: "Ask your compliance data anything — SSVI, CAP, RN intensity — and get precise answers." },
 ];
-
-function Cell({ v }) {
-  if (v === true) return <Check size={17} color="#2E9E62" className="mx-auto" />;
-  if (v === "partial") return <Minus size={17} color="#C98A1F" className="mx-auto" />;
-  return <span className="block text-center text-slate-mute">—</span>;
-}
 
 export default function Home() {
   const faqLd = {
@@ -174,7 +168,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── COMPARE ───────────────────────────────────────── */}
+      {/* ── WHAT YOU GET ──────────────────────────────────── */}
       <section id="compare" className="max-w-content mx-auto px-5 md:px-8 py-20 md:py-28">
         <Reveal>
           <div className="eyebrow">Why Connect Shield</div>
@@ -184,35 +178,18 @@ export default function Home() {
           <p className="text-slate mt-4 max-w-xl">{COMPETITORS.intro}</p>
         </Reveal>
 
-        <Reveal delay={80}>
-          <div className="mt-12 overflow-x-auto rounded-2xl bg-white" style={{ border: "1px solid #E3E7ED" }}>
-            <table className="w-full text-sm min-w-[640px]">
-              <thead>
-                <tr style={{ borderBottom: "1px solid #E3E7ED" }}>
-                  <th className="text-left font-medium text-slate px-5 py-4 w-1/2">Capability</th>
-                  <th className="px-4 py-4 text-center" style={{ background: "#F7F0E1" }}>
-                    <span className="font-display text-ink">Connect Shield</span>
-                  </th>
-                  <th className="px-4 py-4 text-center font-mono text-[12px] text-slate">The Competition</th>
-                  <th className="px-4 py-4 text-center font-mono text-[12px] text-slate">Basic Tools</th>
-                </tr>
-              </thead>
-              <tbody>
-                {COMPETITORS.rows.map((r) => (
-                  <tr key={r.feature} style={{ borderBottom: "1px solid #EEF0F4" }}>
-                    <td className="px-5 py-3.5 text-ink">{r.feature}</td>
-                    <td className="px-4 py-3.5" style={{ background: "#FBF6EC" }}><Cell v={r.cs} /></td>
-                    <td className="px-4 py-3.5"><Cell v={r.engine} /></td>
-                    <td className="px-4 py-3.5"><Cell v={r.shield} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-[12px] font-mono mt-3" style={{ color: "#8992A3" }}>
-            Comparison reflects publicly described features as of {new Date().getFullYear()}. ✓ full · <span style={{ color: "#C98A1F" }}>–</span> partial · — not offered.
-          </p>
-        </Reveal>
+        <div className="grid md:grid-cols-2 gap-3 mt-12">
+          {COMPETITORS.rows.map((r, i) => (
+            <Reveal key={r.feature} delay={(i % 2) * 70}>
+              <div className="flex items-start gap-3 rounded-2xl p-5 bg-white h-full" style={{ border: "1px solid #E3E7ED" }}>
+                <span className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center mt-0.5" style={{ background: "#F7F0E1" }}>
+                  <Check size={14} color="#B8863F" />
+                </span>
+                <span className="text-sm text-ink leading-relaxed">{r.feature}</span>
+              </div>
+            </Reveal>
+          ))}
+        </div>
       </section>
 
       {/* ── SECURITY STRIP ────────────────────────────────── */}
