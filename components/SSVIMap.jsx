@@ -13,7 +13,7 @@ const db = createClient(
 
 const ATLAS = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json'
 
-// FIPS -> postal code
+// FIPS id -> postal code
 const FIPS = {
   '01': 'AL', '02': 'AK', '04': 'AZ', '05': 'AR', '06': 'CA', '08': 'CO',
   '09': 'CT', '10': 'DE', '11': 'DC', '12': 'FL', '13': 'GA', '15': 'HI',
@@ -25,6 +25,8 @@ const FIPS = {
   '47': 'TN', '48': 'TX', '49': 'UT', '50': 'VT', '51': 'VA', '53': 'WA',
   '54': 'WV', '55': 'WI', '56': 'WY', '72': 'PR',
 }
+
+const MAPPED = new Set(Object.values(FIPS))
 
 const NAMES = {
   AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
@@ -43,15 +45,24 @@ const NAMES = {
   MP: 'Northern Mariana Islands', AS: 'American Samoa',
 }
 
-// Small states that need a leader line + outside label
+// Small states get a leader line out to a labeled box.
+// [boxX, boxY] in viewBox coordinates.
 const SMALL = {
-  DC: [640, 300], DE: [648, 268], MD: [656, 240], RI: [672, 176],
-  CT: [672, 204], NJ: [668, 212], MA: [676, 148], NH: [664, 120],
-  VT: [640, 112],
+  VT: [812, 96],
+  NH: [812, 122],
+  MA: [812, 148],
+  RI: [812, 174],
+  CT: [812, 200],
+  NJ: [812, 226],
+  DE: [812, 252],
+  MD: [812, 278],
+  DC: [812, 304],
 }
 
 const W = 960
 const H = 600
+const BOX_W = 62
+const BOX_H = 20
 
 const RAMP = ['#FDF8F1', '#F3E3C9', '#E3C08D', '#CB9A57', '#AE7B36', '#84592A']
 
@@ -62,35 +73,41 @@ export default function SSVIMap({ states }) {
     return m
   }, [states])
 
-  const scored = states.filter((s) => s.avg != null).map((s) => s.avg)
-  const lo = Math.min(...scored)
-  const hi = Math.max(...scored)
+  const scored = useMemo(
+    () => states.filter((s) => s.avg != null).map((s) => s.avg),
+    [states]
+  )
+  const lo = scored.length ? Math.min(...scored) : 0
+  const hi = scored.length ? Math.max(...scored) : 16
 
-  // Quantile breaks so the ramp actually separates states
+  // Quantile breaks — a linear ramp over a ~4 point spread makes everything
+  // look identical, so bucket by rank instead.
   const breaks = useMemo(() => {
     const sorted = [...scored].sort((a, b) => a - b)
-    const n = RAMP.length
     const out = []
-    for (let i = 1; i < n; i++) {
-      out.push(sorted[Math.floor((i / n) * sorted.length)])
+    for (let i = 1; i < RAMP.length; i++) {
+      out.push(sorted[Math.floor((i / RAMP.length) * sorted.length)])
     }
     return out
   }, [scored])
 
-  function fillFor(code) {
+  function bucket(code) {
     const s = byCode[code]
-    if (!s || s.avg == null) return '#F1F5F9'
+    if (!s || s.avg == null) return -1
     let i = 0
     while (i < breaks.length && s.avg >= breaks[i]) i++
-    return RAMP[i]
+    return i
+  }
+
+  function fillFor(code) {
+    const b = bucket(code)
+    return b < 0 ? '#F1F5F9' : RAMP[b]
   }
 
   function inkFor(code) {
-    const s = byCode[code]
-    if (!s || s.avg == null) return '#94A3B8'
-    let i = 0
-    while (i < breaks.length && s.avg >= breaks[i]) i++
-    return i >= 4 ? '#FFFFFF' : '#44403C'
+    const b = bucket(code)
+    if (b < 0) return '#94A3B8'
+    return b >= 4 ? '#FFFFFF' : '#44403C'
   }
 
   const [geo, setGeo] = useState(null)
@@ -108,7 +125,9 @@ export default function SSVIMap({ states }) {
         if (dead) return
         setGeo(feature(topo, topo.objects.states))
       })
-      .catch(() => !dead && setErr(true))
+      .catch(() => {
+        if (!dead) setErr(true)
+      })
     return () => {
       dead = true
     }
@@ -127,7 +146,7 @@ export default function SSVIMap({ states }) {
       if (!d) continue
       p.push({ code, d })
       const ct = path.centroid(f)
-      if (ct && !Number.isNaN(ct[0])) c[code] = ct
+      if (ct && !Number.isNaN(ct[0]) && !Number.isNaN(ct[1])) c[code] = ct
     }
     return { paths: p, centroids: c }
   }, [geo])
@@ -155,24 +174,20 @@ export default function SSVIMap({ states }) {
 
   const sel = active ? byCode[active] : null
   const tip = hover ? byCode[hover] : null
-  const territories = states.filter((s) => !FIPS_HAS(s.code))
-
-  function FIPS_HAS(code) {
-    return Object.values(FIPS).includes(code)
-  }
+  const territories = states.filter((s) => !MAPPED.has(s.code))
 
   return (
     <div>
       <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
         {err && (
           <div className="py-10 text-center text-sm text-slate-500">
-            Map could not load. Use the table below.
+            The map could not load. All figures are in the table below.
           </div>
         )}
 
         {!geo && !err && (
           <div className="py-16 text-center text-sm text-slate-400">
-            Loading map…
+            Loading map&hellip;
           </div>
         )}
 
@@ -202,14 +217,14 @@ export default function SSVIMap({ states }) {
                 )
               })}
 
-              {/* Labels inside larger states */}
+              {/* Inline labels for states big enough to hold them */}
               {paths.map(({ code }) => {
                 if (SMALL[code]) return null
                 const ct = centroids[code]
                 const s = byCode[code]
-                if (!ct || !s) return null
+                if (!ct || !s || s.avg == null) return null
                 return (
-                  <g key={`l-${code}`} pointerEvents="none">
+                  <g key={`lbl-${code}`} pointerEvents="none">
                     <text
                       x={ct[0]}
                       y={ct[1] - 2}
@@ -234,38 +249,40 @@ export default function SSVIMap({ states }) {
                 )
               })}
 
-              {/* Leader lines for small states */}
-              {Object.entries(SMALL).map(([code, [lx, ly]]) => {
+              {/* Leader lines + boxes for the small eastern states */}
+              {Object.entries(SMALL).map(([code, [bx, by]]) => {
                 const ct = centroids[code]
                 const s = byCode[code]
-                if (!ct || !s) return null
+                if (!ct || !s || s.avg == null) return null
+                const isOn = active === code
                 return (
-                  <g key={`s-${code}`}>
+                  <g key={`sm-${code}`}>
                     <line
                       x1={ct[0]}
                       y1={ct[1]}
-                      x2={lx - 4}
-                      y2={ly - 4}
+                      x2={bx}
+                      y2={by}
                       stroke="#CBD5E1"
                       strokeWidth="1"
                     />
+                    <circle cx={ct[0]} cy={ct[1]} r="1.8" fill="#94A3B8" />
                     <rect
-                      x={lx}
-                      y={ly - 14}
-                      width="54"
-                      height="20"
+                      x={bx}
+                      y={by - BOX_H / 2}
+                      width={BOX_W}
+                      height={BOX_H}
                       rx="4"
                       fill={fillFor(code)}
-                      stroke={active === code ? '#0F172A' : '#E2E8F0'}
-                      strokeWidth={active === code ? 2 : 1}
+                      stroke={isOn ? '#0F172A' : '#E2E8F0'}
+                      strokeWidth={isOn ? 2 : 1}
                       onClick={() => pick(code)}
                       onMouseEnter={() => setHover(code)}
                       onMouseLeave={() => setHover(null)}
                       style={{ cursor: 'pointer' }}
                     />
                     <text
-                      x={lx + 27}
-                      y={ly}
+                      x={bx + BOX_W / 2}
+                      y={by + 4}
                       textAnchor="middle"
                       fontSize="10"
                       fontWeight="600"
@@ -279,7 +296,7 @@ export default function SSVIMap({ states }) {
               })}
             </svg>
 
-            {tip && (
+            {tip && tip.avg != null && (
               <div className="pointer-events-none absolute left-3 top-3 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
                 <div className="text-sm font-semibold text-slate-900">
                   {NAMES[hover] || hover}
@@ -365,7 +382,7 @@ export default function SSVIMap({ states }) {
 
           {loading && (
             <div className="px-5 py-6 text-sm text-slate-500 sm:px-6">
-              Loading agencies…
+              Loading agencies&hellip;
             </div>
           )}
 
