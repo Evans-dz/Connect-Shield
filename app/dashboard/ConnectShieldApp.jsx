@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/auth/client";
 import ReportDownloadModal from "@/components/ReportDownloadModal";
+import { computeCompliance } from "@/lib/compliance";
 const FONT_IMPORT = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 `;
@@ -81,16 +82,16 @@ function parseJSON(raw) {
   return null;
 }
 
+// Safe fallback shape. NOTE: carries NO scores. Every score and derived figure
+// is computed from extracted values in lib/compliance.js, never guessed here.
 function safeDefault(overrides = {}) {
   return {
     agencyName: "Unknown Agency", providerNumber: "", reportPeriod: "", reportPeriodEnd: "",
-    reportsAnalyzed: [], overallComplianceScore: 0, overallRiskLevel: "medium",
-    ssviScore: null, ssviUtilizationScore: null, ssviSpendingScore: 3.21,
-    ssviIsEstimated: true, ssviFindings: [],
-    capData: { capYear: "2026", totalBeneficiaryCount: null, perBeneficiaryCap: 34738.63, capLimit: null, netReimbursement: null, capExposure: null, capUtilizationPct: null },
-    psrMetrics: { totalMedicareDays: null, totalClaims: null, totalUnduplicatedCensus: null, avgLengthOfStay: null, snVisitUnits: null, rnUnitsPerDay: null, netReimbursement: null, grossReimbursement: null },
-    qualityMetrics: { cahpsOverallScore: null, cahpsNationalAvg: null, pepperOutlierFlags: 0, qapiProjectCount: 0, surveyDeficiencyCount: 0, surveyConditionLevel: false, openDeficiencies: 0 },
-    complianceCategories: [], criticalFindings: [], _parseWarning: true, ...overrides,
+    reportsAnalyzed: [],
+    capData: { capYear: "", capYearPeriod: "", fullBeneficiaryCount: null, fractionalBeneficiaryCount: null, totalBeneficiaryCount: null },
+    psrMetrics: { totalMedicareDays: null, totalClaims: null, totalUnduplicatedCensus: null, snVisitUnits: null, grossReimbursement: null, sequestration: null, netReimbursement: null, reimbursementPeriod: "" },
+    qualityMetrics: { cahpsOverallScore: null, cahpsNationalAvg: null, pepperOutlierFlags: null, qapiProjectCount: null, surveyDeficiencyCount: null, surveyConditionLevel: false, openDeficiencies: null },
+    criticalFindings: [], _parseWarning: true, ...overrides,
   };
 }
 
@@ -173,42 +174,46 @@ function bestReportDate(iso, periodLabel) {
   return normalizeISO(iso) || deriveReportDate(periodLabel);
 }
 
+// Count the populated leaf values in an analysis object. Used by the
+// completeness guard below — a thin analysis must never overwrite a fuller one.
+function countPopulated(obj, depth = 0) {
+  if (obj == null || depth > 4) return 0;
+  if (Array.isArray(obj)) return obj.reduce((n, v) => n + countPopulated(v, depth + 1), 0);
+  if (typeof obj === "object") {
+    return Object.entries(obj).reduce((n, [k, v]) => (k.startsWith("_") ? n : n + countPopulated(v, depth + 1)), 0);
+  }
+  if (obj === "" || obj === false) return 0;
+  return 1;
+}
+
 // Persist the "latest of each type" dashboard cards to Supabase.
 // KEY RULE: only upsert a card for a report type when THIS analysis actually
 // produced meaningful data for it. That way a PS&R-only upload never overwrites
-// an existing CAHPS or CAP card — each type updates independently, so the
-// dashboard always shows the most recent good data per type per clinic.
-// SSVI is intentionally NOT saved here — its card is fed by the real CCN lookup
-// (published CMS data), not the report's estimate.
+// an existing CAHPS or CAP card — each type updates independently.
+// SSVI is intentionally NOT saved here — it comes from the real CCN lookup.
+// NO SCORES ARE STORED. Cards hold extracted values only; every score is
+// computed on read by lib/compliance.js so there is one source of truth.
 async function saveReportCards({ supabase, clinicId, merged, sourceDocId = null }) {
   if (!supabase || !clinicId || !merged) return;
-  const cats = merged.complianceCategories || [];
   const reportDate = bestReportDate(merged.reportPeriodEnd, merged.reportPeriod);   // date ON the document
   const periodLabel = merged.reportPeriod || null;            // human-readable period
 
   // ── CAP / Beneficiary ──
   const cap = merged.capData || {};
-  if (cap.capLimit != null || cap.netReimbursement != null || cap.totalBeneficiaryCount != null) {
+  if (cap.totalBeneficiaryCount != null || cap.capYear) {
     await upsertReportCard({
       supabase, clinicId, reportType: "cap", reportDate, reportPeriodLabel: periodLabel, sourceDocId,
-      analysis: { capData: cap, category: cats.find((c) => c.id === "cap_exposure") || null },
+      analysis: { capData: cap },
     });
   }
 
-  // ── PS&R (consolidated leading indicators + composite) ──
+  // ── PS&R (extracted values only) ──
   const psr = merged.psrMetrics || {};
-  const psrHasData = Object.values(psr).some((v) => v != null);
+  const psrHasData = Object.values(psr).some((v) => v != null && v !== "");
   if (psrHasData) {
     await upsertReportCard({
       supabase, clinicId, reportType: "psr", reportDate, reportPeriodLabel: periodLabel, sourceDocId,
-      analysis: {
-        psrMetrics: psr,
-        overallComplianceScore: merged.overallComplianceScore ?? null,
-        overallRiskLevel: merged.overallRiskLevel ?? null,
-        categories: cats.filter((c) =>
-          ["rn_intensity", "length_of_stay", "billing_trend", "level_of_care", "pharmacy_utilization"].includes(c.id)
-        ),
-      },
+      analysis: { psrMetrics: psr },
     });
   }
 
@@ -217,23 +222,38 @@ async function saveReportCards({ supabase, clinicId, merged, sourceDocId = null 
 }
 
 // Upsert a single report card — the ONE path for all card writes.
-// DATE-AWARE: "latest of each type" is decided by the date ON the document, not
-// upload time. If a report with a newer report_date is already on file, an older
-// upload is skipped rather than clobbering it. Comparison only happens when both
-// dates are known; otherwise we fall back to last-write-wins.
+//
+// TWO GUARDS:
+//  1. DATE-AWARE — "latest of each type" is decided by the date ON the document,
+//     not upload time. A report older than what's on file is skipped.
+//  2. COMPLETENESS — a thinner analysis never overwrites a fuller one for the
+//     same period. This is what stops a Beneficiary-only run from wiping out a
+//     complete PS&R + Beneficiary analysis and leaving the dashboard with nulls.
 async function upsertReportCard({ supabase, clinicId, reportType, analysis, reportDate = null, reportPeriodLabel = null, sourceDocId = null }) {
   if (!supabase || !clinicId || !analysis) return { error: "missing args" };
   try {
     const { data: existing } = await supabase
       .from("clinic_report_cards")
-      .select("report_date")
+      .select("report_date, analysis")
       .eq("clinic_id", clinicId)
       .eq("report_type", reportType)
       .maybeSingle();
-    // ISO date strings compare correctly lexicographically.
-    if (existing && existing.report_date && reportDate && existing.report_date > reportDate) {
-      console.log(`[report-cards] kept newer ${reportType} on file (${existing.report_date} > ${reportDate}) — skipping older upload`);
-      return { skipped: true };
+
+    if (existing) {
+      // ISO date strings compare correctly lexicographically.
+      if (existing.report_date && reportDate && existing.report_date > reportDate) {
+        console.log(`[report-cards] kept newer ${reportType} on file (${existing.report_date} > ${reportDate}) — skipping older upload`);
+        return { skipped: true, reason: "older" };
+      }
+      const isNewer = existing.report_date && reportDate && reportDate > existing.report_date;
+      if (!isNewer) {
+        const before = countPopulated(existing.analysis);
+        const after = countPopulated(analysis);
+        if (after < before) {
+          console.log(`[report-cards] kept fuller ${reportType} on file (${before} values > ${after}) — skipping thinner upload`);
+          return { skipped: true, reason: "thinner" };
+        }
+      }
     }
   } catch (e) {
     // If the pre-check fails for any reason, fall through to a normal upsert.
@@ -397,7 +417,7 @@ function detectReportType(filename, text) {
   if (fn.includes("qapi") || tx.includes("quality assurance and performance improvement")) return "qapi";
   if (fn.includes("survey") || tx.includes("statement of deficiencies") || tx.includes("cms-2567")) return "survey";
   if (fn.includes("policy") || fn.includes("manual") || fn.includes("procedure")) return "policy";
-  if (fn.includes("beneficiar") || fn.includes("b51562") || fn.includes("hcr01") || tx.includes("beneficiary count summary") || tx.includes("fractional beneficiary") || tx.includes("cap year")) return "beneficiary";
+  if (fn.includes("beneficiar") || fn.includes("hcr01") || tx.includes("beneficiary count summary") || tx.includes("fractional beneficiary") || tx.includes("beneficiary identification period")) return "beneficiary";
   if (fn.includes("pepper") || tx.includes("hospice pepper") || tx.includes("compare targets report")) return "pepper";
   if (fn.includes("compare") || tx.includes("hospice compare")) return "cms_public";
   if (tx.includes("provider statistical and reimbursement") || tx.includes("provider summary report") || tx.includes("statistic section") || tx.includes("medicare days") || fn.includes("summary25")) return "psr";
@@ -511,40 +531,41 @@ async function callClaudeDocs(system, textContent, imageBlocks = [], maxTokens =
 }
 
 // ─── PROMPTS ──────────────────────────────────────────────────────────────────
-const SYSTEM_PROMPT_1 = `You are a Medicare hospice compliance expert for Connect Shield, an executive compliance intelligence platform.
+const SYSTEM_PROMPT_1 = `You are a data extraction engine for Connect Shield, a Medicare hospice compliance platform. Your ONLY job is to read values off the reports you are given and return them verbatim. You must NOT calculate anything, NOT compute ratios or percentages, and NOT assign any score. If a value is not printed on the report, return null. Never estimate, never infer, never fill a gap.
 
-PS&R REPORT 810 STRUCTURE — extract these exact fields:
-STATISTIC SECTION: MEDICARE DAYS | CLAIMS | TOTAL UNDUPLICATED CENSUS COUNT (each has multiple period columns)
-CHARGE SECTION: 0551=Skilled Nursing 15-min units | 0561=Social Work | 0571=Aide | 0651=RHC days | 0250=Pharmacy
-REIMBURSEMENT SECTION: GROSS REIMBURSEMENT | SEQUESTRATION | NET REIMBURSEMENT
+PS&R REPORT 810 LAYOUT
+The report has up to FOUR period columns side by side, labelled "SERVICES FOR PERIOD MM/DD/YY - MM/DD/YY". Later columns are often all zeros. Use the MOST RECENT period that contains non-zero data, and report that period label exactly as printed in psrMetrics.reimbursementPeriod. Take every psrMetrics value from that SAME column. Never mix columns and never add columns together.
 
-BENEFICIARY COUNT REPORT: Cap Year | Full Count | Fractional Count | Total Count table
+STATISTIC SECTION rows: MEDICARE DAYS, CLAIMS, TOTAL UNDUPLICATED CENSUS COUNT.
 
-CALCULATIONS:
-- AvgLOS = Medicare Days ÷ Unduplicated Census
-- RN intensity = Rev 0551 units ÷ Medicare Days (flag under 1.0)
-- CAP limit = Total Beneficiaries × per-cap (FY2025=$34,159.74, FY2026=$34,738.63)
-- CAP exposure = Net Reimbursement − CAP limit
-- CAP utilization% = (Net Reimbursement ÷ CAP limit) × 100
+CHARGE SECTION column mapping. This is critical and easy to get wrong. Each period has four sub-columns in this order: "UNDUP DAYS", "Hours/15 Min. Increments", "UNITS", "CHARGES". Different revenue codes populate DIFFERENT sub-columns and leave the others blank:
+- Revenue code 0551 (SKILLED NURS/VISIT/15 MIN): the quantity sits in the "Hours/15 Min. Increments" sub-column. Its "UNITS" sub-column is BLANK. snVisitUnits = the Hours/15 Min. Increments figure on the 0551 row. Do NOT read the UNITS column for 0551 and do NOT return 0 because UNITS is empty.
+- Revenue codes 0561 and 0571 also report in "Hours/15 Min. Increments".
+- Revenue code 0250 (PHARMACY) reports in "UNITS".
+- Revenue code 0651 (HOSPICE/RTN HOME/DAYS) reports in "UNDUP DAYS".
 
-SSVI UTILIZATION SCORE (0-8): Start 0. RN<0.75→+3, 0.75-1.0→+2, 1.0-1.5→+1. AvgLOS>180→+2, 120-180→+1. GIP>10%→+1. Cap at 8.
-SSVI Spending Score = 3.21 unless actual CMS data provided.
-Total SSVI = Utilization + Spending. National avg = 6.42.
+REIMBURSEMENT SECTION rows: GROSS REIMBURSEMENT, SEQUESTRATION, NET REIMBURSEMENT. Report the dollar figures exactly as printed, as plain numbers with no currency symbols or commas.
 
-OVERALL SCORE (0-100): Start 85. CAP exceeded→-20. CAP 85-100%→-10. RN<0.75→-15. RN 0.75-1.0→-8. SSVI>10→-10. SSVI 8-10→-5. Declining RN→-5.
+BENEFICIARY COUNT REPORT (Streamlined Hospice Beneficiary Count Summary)
+The header states a "Beneficiary Identification Period: MM/DD/YY to MM/DD/YY". Report that exactly as printed in capData.capYearPeriod. The table lists one row per Cap Year with Full Beneficiary Count, Fractional Beneficiary Count and Total Beneficiary Count. Use the row whose Cap Year matches the end year of the Beneficiary Identification Period. Ignore rows that are all zeros.
 
-Return ONLY valid JSON starting with { ending with }. No markdown. Complete the entire JSON:
+Return ONLY valid JSON starting with { and ending with }. No markdown, no commentary:
 
-{"agencyName":"string","providerNumber":"string","reportPeriod":"string","reportPeriodEnd":"YYYY-MM-DD or empty string","reportsAnalyzed":["list"],"overallComplianceScore":0,"overallRiskLevel":"medium","ssviScore":0,"ssviUtilizationScore":0,"ssviSpendingScore":3.21,"ssviIsEstimated":true,"ssviFindings":[{"measure":"string","detail":"string","status":"warn"}],"capData":{"capYear":"2026","totalBeneficiaryCount":null,"perBeneficiaryCap":34738.63,"capLimit":null,"netReimbursement":null,"capExposure":null,"capUtilizationPct":null},"psrMetrics":{"totalMedicareDays":null,"totalClaims":null,"totalUnduplicatedCensus":null,"avgLengthOfStay":null,"snVisitUnits":null,"rnUnitsPerDay":null,"netReimbursement":null,"grossReimbursement":null},"qualityMetrics":{"cahpsOverallScore":null,"cahpsNationalAvg":null,"pepperOutlierFlags":0,"qapiProjectCount":0,"surveyDeficiencyCount":0,"surveyConditionLevel":false,"openDeficiencies":0},"complianceCategories":[{"id":"rn_intensity","label":"RN Visit Intensity","score":0,"source":"PS&R 810","riskLevel":"medium","clawbackAmount":0,"summary":"string","factors":[{"weight":60,"label":"string","status":"warn","detail":"string"},{"weight":40,"label":"string","status":"warn","detail":"string"}],"actions":["string"]},{"id":"cap_exposure","label":"Medicare CAP Exposure","score":0,"source":"PS&R + Beneficiary Count","riskLevel":"high","clawbackAmount":0,"summary":"string","factors":[{"weight":70,"label":"string","status":"warn","detail":"string"},{"weight":30,"label":"string","status":"good","detail":"string"}],"actions":["string"]},{"id":"length_of_stay","label":"Length of Stay","score":0,"source":"PS&R 810","riskLevel":"low","clawbackAmount":0,"summary":"string","factors":[{"weight":60,"label":"string","status":"good","detail":"string"},{"weight":40,"label":"string","status":"good","detail":"string"}],"actions":["string"]},{"id":"billing_trend","label":"Billing Trend","score":0,"source":"PS&R 810","riskLevel":"low","clawbackAmount":0,"summary":"string","factors":[{"weight":50,"label":"string","status":"good","detail":"string"},{"weight":50,"label":"string","status":"good","detail":"string"}],"actions":["string"]}]}
+{"agencyName":"provider name exactly as printed, or empty string","providerNumber":"the provider or CCN number as printed, or empty string","reportPeriod":"a short human-readable label for the period this analysis covers","reportPeriodEnd":"YYYY-MM-DD, the LAST day of that period, or empty string","reportsAnalyzed":["names of the report types you actually read"],"psrMetrics":{"totalMedicareDays":null,"totalClaims":null,"totalUnduplicatedCensus":null,"snVisitUnits":null,"grossReimbursement":null,"sequestration":null,"netReimbursement":null,"reimbursementPeriod":""},"capData":{"capYear":"","capYearPeriod":"","fullBeneficiaryCount":null,"fractionalBeneficiaryCount":null,"totalBeneficiaryCount":null},"qualityMetrics":{"cahpsOverallScore":null,"cahpsNationalAvg":null,"pepperOutlierFlags":null,"qapiProjectCount":null,"surveyDeficiencyCount":null,"surveyConditionLevel":false,"openDeficiencies":null}}
 
-Use ACTUAL numbers. Calculate precisely. Keep strings under 25 words.
-reportPeriod = the human-readable reporting period exactly as shown on the report. reportPeriodEnd = the LAST day of that reporting period in YYYY-MM-DD (e.g. a federal fiscal year ending 09/30/2026 → "2026-09-30"; "10/01/25 to 09/30/26" → "2026-09-30"). Use empty string if the period is not stated.`;
+Every numeric field must be a plain number or null. Never a string, never a formula, never a calculated result. Leave qualityMetrics fields null unless a CAHPS, PEPPER or survey document was actually included in this upload.`;
 
-const SYSTEM_PROMPT_2 = `You are a Medicare hospice compliance expert. Generate 3 more compliance categories and 3 critical findings. Keep strings under 25 words. Return ONLY valid JSON:
+// Findings are the interpretive layer and are labelled as such wherever they
+// appear. They are written AFTER the numbers are computed, and carry no scores.
+const SYSTEM_PROMPT_2 = `You are a Medicare hospice compliance analyst for Connect Shield. You are given figures already extracted from a hospice's reports, plus the metrics calculated from them. Write up to 3 critical findings a hospice owner should act on.
 
-{"complianceCategories":[{"id":"level_of_care","label":"Level of Care Mix","score":90,"source":"PS&R 810","riskLevel":"low","clawbackAmount":0,"summary":"string","factors":[{"weight":60,"label":"string","status":"good","detail":"string"},{"weight":40,"label":"string","status":"good","detail":"string"}],"actions":["string"]},{"id":"survey_readiness","label":"Survey Readiness","score":75,"source":"General Assessment","riskLevel":"medium","clawbackAmount":0,"summary":"string","factors":[{"weight":50,"label":"string","status":"good","detail":"string"},{"weight":50,"label":"string","status":"warn","detail":"string"}],"actions":["string"]},{"id":"pharmacy_utilization","label":"Pharmacy & Ancillary","score":80,"source":"PS&R 810","riskLevel":"low","clawbackAmount":0,"summary":"string","factors":[{"weight":60,"label":"string","status":"good","detail":"string"},{"weight":40,"label":"string","status":"good","detail":"string"}],"actions":["string"]}],"criticalFindings":[{"severity":"high","category":"string","source":"string","finding":"string under 25 words","recommendation":"string under 20 words","clawbackRisk":0},{"severity":"high","category":"string","source":"string","finding":"string under 25 words","recommendation":"string under 20 words","clawbackRisk":0},{"severity":"medium","category":"string","source":"string","finding":"string under 25 words","recommendation":"string under 20 words","clawbackRisk":0}]}
+Ground every finding in a number you were given. Never invent figures, never cite a number that was not provided, and never assign a score. If the data supports fewer than three findings, return fewer.
 
-Use real numbers from the report data provided.`;
+Return ONLY valid JSON, no markdown:
+
+{"criticalFindings":[{"severity":"high","category":"short category name","source":"which report the finding comes from","finding":"what the data shows, under 25 words, citing the actual number","recommendation":"the concrete next step, under 20 words","clawbackRisk":0}]}
+
+severity is "high", "medium" or "low". clawbackRisk is a dollar figure ONLY when one was explicitly provided to you; otherwise 0.`;
 
 // ─── SSVI MEASURE DEFINITIONS ─────────────────────────────────────────────────
 // These are the EIGHT claims-based utilization measures that make up the SSVI
@@ -715,29 +736,24 @@ function CCNLookup({ onSSVIData, compact = false }) {
 }
 
 // ─── SSVI BREAKDOWN PANEL ─────────────────────────────────────────────────────
-function SSVIBreakdownPanel({ ssviData, estimatedData }) {
+function SSVIBreakdownPanel({ ssviData }) {
   const [open, setOpen] = useState(true);
 
-  const hasReal = ssviData != null;
-  const resolved = hasReal ? resolveSSVI(ssviData) : null;
+  const resolved = ssviData ? resolveSSVI(ssviData) : null;
+  if (!resolved) return null;
 
-  // Displayed values: real (from the resolved year) when we have a CCN row, else PS&R estimate.
-  const dispScore  = hasReal ? resolved?.total : estimatedData?.ssviScore;
-  const dispUtil   = hasReal ? resolved?.utilization : estimatedData?.ssviUtilizationScore;
-  const dispSpend  = hasReal ? resolved?.spending : estimatedData?.ssviSpendingScore;
-  const dispYear   = resolved?.year ?? 2025;
-  const isFallback = resolved?.isFallback ?? false;
-  const priorYear  = resolved?.priorYear;
-  const priorTotal = resolved?.priorTotal;
+  const dispScore  = resolved.total;
+  const dispUtil   = resolved.utilization;
+  const dispSpend  = resolved.spending;
+  const dispYear   = resolved.year;
+  const isFallback = resolved.isFallback;
+  const priorYear  = resolved.priorYear;
+  const priorTotal = resolved.priorTotal;
 
   if (dispScore == null && priorTotal == null) return null;
 
-  const getMeasureStatus = (key) => {
-    if (!hasReal || !resolved) return null;
-    return resolved.flags[key];
-  };
-
   const showYoY = !isFallback && dispScore != null && priorTotal != null;
+  const flaggedCount = SSVI_MEASURES.filter((m) => resolved.flags[m.key] === true).length;
 
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
@@ -748,8 +764,7 @@ function SSVIBreakdownPanel({ ssviData, estimatedData }) {
             <div className="text-xs uppercase tracking-widest font-mono" style={{ color: "#64708A" }}>SSVI — Service &amp; Spending Variation Index</div>
             <div className="text-lg mt-0.5" style={{ fontFamily: "Fraunces, serif", color: "#16202E" }}>
               {ssviLabel(dispScore || 0)} · {dispScore ?? "—"}/16
-              {!hasReal && <span className="text-sm font-mono ml-2" style={{ color: "#64708A" }}>(estimated from PS&R)</span>}
-              {hasReal && <span className="text-xs font-mono ml-2 px-2 py-0.5 rounded" style={{ background: "#EAF6EF", color: "#2E9E62" }}>✓ CMS Published · FY{dispYear}</span>}
+              <span className="text-xs font-mono ml-2 px-2 py-0.5 rounded" style={{ background: "#EAF6EF", color: "#2E9E62" }}>✓ CMS Published · FY{dispYear}</span>
             </div>
             <div className="text-xs font-mono mt-0.5" style={{ color: "#64708A" }}>
               National avg: 6.42 · Median: 7 · Scores ≥10 trigger CMS program integrity review
@@ -762,7 +777,6 @@ function SSVIBreakdownPanel({ ssviData, estimatedData }) {
 
       {open && (
         <div className="px-5 pb-6 pt-1 space-y-5" style={{ borderTop: "1px solid #E3E7ED" }}>
-          {/* FY2024 fallback notice */}
           {isFallback && (
             <div className="rounded-xl p-3" style={{ background: "#FEF3E2", border: "1px solid #F0C87A" }}>
               <div className="text-xs font-mono" style={{ color: "#7A5700" }}>
@@ -771,29 +785,26 @@ function SSVIBreakdownPanel({ ssviData, estimatedData }) {
             </div>
           )}
 
-          {/* Subscores */}
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl p-4" style={{ background: "#F5F6F8" }}>
               <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>Utilization Score</div>
               <div className="text-2xl font-mono mt-1" style={{ color: ssviColor(dispUtil || 0) }}>{dispUtil ?? "—"}<span className="text-sm">/8</span></div>
-              <div className="text-xs font-mono mt-0.5" style={{ color: "#64708A" }}>Based on {SSVI_MEASURES.length} claims-based utilization measures</div>
+              <div className="text-xs font-mono mt-0.5" style={{ color: "#64708A" }}>{flaggedCount} of {SSVI_MEASURES.length} utilization measures flagged</div>
             </div>
             <div className="rounded-xl p-4" style={{ background: "#F5F6F8" }}>
-              <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>Non-Hospice Spending Score{!hasReal && " (est.)"}</div>
+              <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>Non-Hospice Spending Score</div>
               <div className="text-2xl font-mono mt-1" style={{ color: ssviColor(dispSpend || 0) }}>{dispSpend ?? "—"}<span className="text-sm">/8</span></div>
               <div className="text-xs font-mono mt-0.5" style={{ color: "#64708A" }}>Part A/B spending for enrolled beneficiaries</div>
             </div>
           </div>
 
-          {/* Utilization measures breakdown */}
           <div>
             <div className="text-xs uppercase tracking-widest font-mono mb-3" style={{ color: "#64708A" }}>
               The {SSVI_MEASURES.length} CMS SSVI Utilization Measures — FY{dispYear} Scoring Breakdown
             </div>
             <div className="space-y-3">
               {SSVI_MEASURES.map((measure, i) => {
-                const flagged = hasReal ? getMeasureStatus(measure.key) : null;
-                const points = flagged === true ? 1 : 0;
+                const flagged = resolved.flags[measure.key];
                 return (
                   <div key={measure.key} className="rounded-xl p-4"
                     style={{ background: flagged === true ? "#FDECEA" : flagged === false ? "#EAF6EF" : "#F5F6F8", border: `1px solid ${flagged === true ? "#F3B8AC" : flagged === false ? "#A8DFC0" : "#E3E7ED"}` }}>
@@ -806,7 +817,7 @@ function SSVIBreakdownPanel({ ssviData, estimatedData }) {
                           </span>
                           {flagged === true && <span className="text-[11px] font-mono" style={{ color: "#D14343" }}>+1 POINT (flagged)</span>}
                           {flagged === false && <span className="text-[11px] font-mono" style={{ color: "#2E9E62" }}>0 POINTS (passing)</span>}
-                          {flagged === null && <span className="text-[11px] font-mono" style={{ color: "#8992A3" }}>Upload CCN for actual score</span>}
+                          {flagged == null && <span className="text-[11px] font-mono" style={{ color: "#8992A3" }}>Not published for this year</span>}
                         </div>
                         <div className="text-sm font-medium mt-1" style={{ color: "#16202E" }}>{measure.label}</div>
                         <div className="text-xs mt-1" style={{ color: "#64708A" }}>{measure.description}</div>
@@ -828,7 +839,6 @@ function SSVIBreakdownPanel({ ssviData, estimatedData }) {
             </div>
           </div>
 
-          {/* Year over year */}
           {showYoY && (
             <div className="rounded-xl p-4" style={{ background: "#F5F6F8" }}>
               <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>Year-Over-Year Trend</div>
@@ -852,14 +862,6 @@ function SSVIBreakdownPanel({ ssviData, estimatedData }) {
                   ⚠ Score increased {dispScore - priorTotal} points year-over-year — rising SSVI indicates increasing CMS scrutiny
                 </div>
               )}
-            </div>
-          )}
-
-          {!hasReal && (
-            <div className="rounded-xl p-3" style={{ background: "#F5F6F8" }}>
-              <div className="text-xs font-mono" style={{ color: "#64708A" }}>
-                <strong>To see actual CMS measure flags:</strong> Enter your CCN in the lookup field above. Your actual published SSVI score will replace this estimate and show exactly which of the {SSVI_MEASURES.length} utilization measures you were flagged on with your specific values.
-              </div>
             </div>
           )}
         </div>
@@ -888,51 +890,25 @@ function fmtCardDate(iso) {
   catch { return ""; }
 }
 
-function ComplianceCardsRow({ clinicId }) {
-  const [supabase] = useState(() => createClient());
-  const [cards, setCards] = useState({});     // { cap: {...analysis, _updatedAt}, ... }
-  const [loading, setLoading] = useState(true);
+// Cards and computed metrics both arrive as props from Dashboard, which owns the
+// single Supabase query. CAP and PS&R figures are read from the COMPUTED metrics
+// so a card can never disagree with the score above it.
+function ComplianceCardsRow({ cards = {}, loading = false, metrics = {} }) {
   const [openType, setOpenType] = useState(null);
-
-  useEffect(() => {
-    if (!clinicId) { setLoading(false); return; }
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("clinic_report_cards")
-          .select("report_type, analysis, updated_at, report_date, report_period_label")
-          .eq("clinic_id", clinicId);
-        if (!cancelled && !error) {
-          const map = {};
-          (data || []).forEach((r) => { map[r.report_type] = { ...(r.analysis || {}), _updatedAt: r.updated_at, _reportDate: r.report_date, _periodLabel: r.report_period_label }; });
-          setCards(map);
-        }
-      } catch (e) {
-        console.warn("[cards] load failed", e);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [supabase, clinicId]);
 
   // ── Per-type summary: headline value + status color for the collapsed card ──
   const summaryFor = (type, a) => {
     if (type === "cap") {
-      const cap = a.capData || {};
-      if (cap.capUtilizationPct != null) {
-        const pct = Number(cap.capUtilizationPct);
+      if (metrics.capUtilizationPct != null) {
+        const pct = Number(metrics.capUtilizationPct);
         return { value: `${pct.toFixed(1)}%`, label: "CAP utilization", color: pct >= 100 ? "#D14343" : pct >= 85 ? "#C98A1F" : "#2E9E62" };
       }
-      if (cap.capExposure != null) return { value: fmtD(cap.capExposure), label: "CAP exposure", color: cap.capExposure > 0 ? "#D14343" : "#2E9E62" };
+      if (metrics.capLimit != null) return { value: fmtD(metrics.capLimit), label: "Aggregate cap limit", color: "#2E9E62" };
       return { value: "On file", label: "Beneficiary data saved", color: "#2E9E62" };
     }
     if (type === "psr") {
-      const s = a.overallComplianceScore;
-      if (s != null && s > 0) return { value: String(s), label: "Composite score", color: scoreColor(s) };
-      const rn = a.psrMetrics?.rnUnitsPerDay;
-      if (rn != null) return { value: `${rn} u/day`, label: "RN intensity", color: rn < 1.0 ? "#C98A1F" : "#2E9E62" };
+      if (metrics.rnUnitsPerDay != null) return { value: `${metrics.rnUnitsPerDay} u/day`, label: "RN intensity", color: metrics.rnUnitsPerDay < 1.0 ? "#C98A1F" : "#2E9E62" };
+      if (metrics.totalMedicareDays != null) return { value: fmt(metrics.totalMedicareDays), label: "Medicare days", color: "#2E9E62" };
       return { value: "On file", label: "PS&R data saved", color: "#2E9E62" };
     }
     if (type === "cahps") {
@@ -960,54 +936,51 @@ function ComplianceCardsRow({ clinicId }) {
   // ── Per-type drill-down body ──
   const detailFor = (type, a) => {
     if (type === "cap") {
-      const cap = a.capData || {};
-      const metrics = [
-        { label: "Cap Year", value: cap.capYear || "—" },
-        { label: "Total Beneficiaries", value: cap.totalBeneficiaryCount != null ? Number(cap.totalBeneficiaryCount).toFixed(4) : "—" },
-        { label: "Per-Beneficiary Cap", value: fmtD(cap.perBeneficiaryCap) },
-        { label: "Aggregate Cap Limit", value: fmtD(cap.capLimit) },
-        { label: "Net Reimbursement", value: fmtD(cap.netReimbursement) },
-        { label: "CAP Exposure", value: fmtD(cap.capExposure), warn: cap.capExposure > 0 },
-      ];
-      return (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {metrics.map((m, i) => (
-            <div key={i} className="rounded-xl p-3" style={{ background: m.warn ? "#FEF3E2" : "#F5F6F8" }}>
-              <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>{m.label}</div>
-              <div className="text-base font-mono mt-1" style={{ color: m.warn ? "#C98A1F" : "#16202E" }}>{m.value}</div>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    if (type === "psr") {
-      const psr = a.psrMetrics || {};
-      const metrics = [
-        { label: "Medicare Days", value: psr.totalMedicareDays != null ? fmt(psr.totalMedicareDays) : "—" },
-        { label: "Unduplicated Census", value: psr.totalUnduplicatedCensus != null ? fmt(psr.totalUnduplicatedCensus) : "—" },
-        { label: "Avg Length of Stay", value: psr.avgLengthOfStay != null ? `${psr.avgLengthOfStay} days` : "—", warn: psr.avgLengthOfStay > 180 },
-        { label: "RN Intensity", value: psr.rnUnitsPerDay != null ? `${psr.rnUnitsPerDay} u/day` : "—", warn: psr.rnUnitsPerDay < 1.0 },
-        { label: "Gross Reimbursement", value: fmtD(psr.grossReimbursement) },
-        { label: "Net Reimbursement", value: fmtD(psr.netReimbursement) },
+      const rows = [
+        { label: "Cap Year", value: metrics.capYear || "—" },
+        { label: "Total Beneficiaries", value: metrics.totalBeneficiaryCount != null ? Number(metrics.totalBeneficiaryCount).toFixed(4) : "—" },
+        { label: "Per-Beneficiary Cap", value: fmtD(metrics.perBeneficiaryCap) },
+        { label: "Aggregate Cap Limit", value: fmtD(metrics.capLimit) },
+        { label: "Net Reimbursement", value: fmtD(metrics.netReimbursement) },
+        { label: "CAP Exposure", value: fmtD(metrics.capExposure), warn: metrics.capExposure > 0 },
       ];
       return (
         <div className="space-y-3">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {metrics.map((m, i) => (
+            {rows.map((m, i) => (
               <div key={i} className="rounded-xl p-3" style={{ background: m.warn ? "#FEF3E2" : "#F5F6F8" }}>
                 <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>{m.label}</div>
                 <div className="text-base font-mono mt-1" style={{ color: m.warn ? "#C98A1F" : "#16202E" }}>{m.value}</div>
               </div>
             ))}
           </div>
-          {Array.isArray(a.categories) && a.categories.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {a.categories.map((c) => (
-                <span key={c.id} className="text-[11px] font-mono px-2 py-1 rounded"
-                  style={{ background: "#F5F6F8", color: scoreColor(c.score) }}>{c.label}: {c.score}</span>
-              ))}
+          {(metrics.reimbursementPeriod || metrics.capYearPeriod) && (
+            <div className="text-[11px] font-mono rounded-lg px-3 py-2" style={{ background: "#F5F6F8", color: "#64708A" }}>
+              Basis: reimbursement covers {metrics.reimbursementPeriod || "—"}; cap year covers {metrics.capYearPeriod || "—"}.
             </div>
           )}
+        </div>
+      );
+    }
+    if (type === "psr") {
+      const rows = [
+        { label: "Medicare Days", value: metrics.totalMedicareDays != null ? fmt(metrics.totalMedicareDays) : "—" },
+        { label: "Unduplicated Census", value: metrics.totalUnduplicatedCensus != null ? fmt(metrics.totalUnduplicatedCensus) : "—" },
+        { label: "Avg Length of Stay", value: metrics.avgLengthOfStay != null ? `${metrics.avgLengthOfStay} days` : "—", warn: metrics.avgLengthOfStay > 180 },
+        { label: "RN Intensity", value: metrics.rnUnitsPerDay != null ? `${metrics.rnUnitsPerDay} u/day` : "—", warn: metrics.rnUnitsPerDay < 1.0 },
+        { label: "SN Units (Rev 0551)", value: metrics.snVisitUnits != null ? fmt(metrics.snVisitUnits) : "—" },
+        { label: "Gross Reimbursement", value: fmtD(metrics.grossReimbursement) },
+        { label: "Sequestration", value: fmtD(metrics.sequestration) },
+        { label: "Net Reimbursement", value: fmtD(metrics.netReimbursement) },
+      ];
+      return (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {rows.map((m, i) => (
+            <div key={i} className="rounded-xl p-3" style={{ background: m.warn ? "#FEF3E2" : "#F5F6F8" }}>
+              <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>{m.label}</div>
+              <div className="text-base font-mono mt-1" style={{ color: m.warn ? "#C98A1F" : "#16202E" }}>{m.value}</div>
+            </div>
+          ))}
         </div>
       );
     }
@@ -1176,42 +1149,99 @@ function ordinalPct(n) {
   return `${i}${["th", "st", "nd", "rd"][i % 10] || "th"}`;
 }
 
+// Turn a computed signal into the category shape the tiles, drill-downs and the
+// PDF already understand. Nothing here is model-generated: the score comes from a
+// published band and the summary states the value it was read from.
+function signalToCategory(sig, metrics = {}) {
+  const risk = sig.score >= 80 ? "low" : sig.score >= 60 ? "medium" : "high";
+  const status = sig.score >= 80 ? "good" : sig.score >= 60 ? "warn" : "bad";
+  const clawback = sig.id === "capExposure" && metrics.capExposure > 0 ? metrics.capExposure : 0;
+  const factors = [{ weight: sig.weight, label: "Weight in composite index", status, detail: sig.basis }];
+  if (sig.id === "capExposure" && sig.windows) {
+    factors.push({ weight: 0, label: "Comparison basis", status: sig.periodsAligned ? "good" : "warn", detail: sig.windows.note });
+  }
+  return { id: sig.id, label: sig.label, score: sig.score, source: sig.source, riskLevel: risk,
+           clawbackAmount: clawback, summary: sig.basis, factors, actions: [] };
+}
+
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName }) {
   const [supabase] = useState(() => createClient());
   const [openId, setOpenId] = useState(null);
   const [ccnResult, setCcnResult] = useState(ssviData);
-  const [storedAnalysis, setStoredAnalysis] = useState(null); // full analysis persisted in Supabase
+  const [storedAnalysis, setStoredAnalysis] = useState(null);
+  const [cards, setCards] = useState({});
+  const [cardsLoading, setCardsLoading] = useState(true);
 
   useEffect(() => { setCcnResult(ssviData); }, [ssviData]);
 
-  // On mount, load the last full analysis for this clinic so the ENTIRE dashboard
-  // (composite score, leading indicators, CAP/PS&R detail, findings) survives a
-  // reload — not just the persistent cards. In-session analysisData still wins when
-  // present (a fresh upload), this is the fallback after a refresh.
+  // ONE query for everything persisted about this clinic: the composite row of
+  // extracted values plus every per-type card. The compliance calculation and
+  // the cards below both read from this, so they cannot disagree.
   useEffect(() => {
-    if (!clinicId) return;
+    if (!clinicId) { setCardsLoading(false); return; }
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("clinic_report_cards")
-          .select("analysis")
-          .eq("clinic_id", clinicId)
-          .eq("report_type", "composite")
-          .maybeSingle();
-        if (!cancelled && data?.analysis) setStoredAnalysis(data.analysis);
-      } catch (e) { /* no saved analysis yet — fine */ }
+          .select("report_type, analysis, updated_at, report_date, report_period_label")
+          .eq("clinic_id", clinicId);
+        if (cancelled || error) { if (!cancelled) setCardsLoading(false); return; }
+        const map = {};
+        let composite = null;
+        (data || []).forEach((r) => {
+          if (r.report_type === "composite") composite = r.analysis || null;
+          else map[r.report_type] = { ...(r.analysis || {}), _updatedAt: r.updated_at, _reportDate: r.report_date, _periodLabel: r.report_period_label };
+        });
+        setCards(map);
+        if (composite) setStoredAnalysis(composite);
+      } catch (e) {
+        console.warn("[dashboard] load failed", e);
+      } finally {
+        if (!cancelled) setCardsLoading(false);
+      }
     })();
     return () => { cancelled = true; };
   }, [supabase, clinicId]);
 
+  const d = analysisData || storedAnalysis;
+  const resolvedSsvi = resolveSSVI(ccnResult);
+  const isRealSsvi = resolvedSsvi != null;
+
+  // ── THE CALCULATION ──
+  // Every derived figure and every score comes from here. Raw extracted values
+  // flow in; nothing a model calculated is used.
+  const compliance = useMemo(() => {
+    const raw = {
+      ...(d?.psrMetrics || {}),
+      ...(cards.psr?.psrMetrics || {}),
+      ...(d?.capData || {}),
+      ...(cards.cap?.capData || {}),
+    };
+    if (!raw.reimbursementPeriod) raw.reimbursementPeriod = cards.psr?._periodLabel || d?.reportPeriod || null;
+    return computeCompliance({
+      raw,
+      ssvi: resolvedSsvi,
+      pepper: cards.pepper || null,
+      cahps: cards.cahps || null,
+      qapi: cards.qapi || null,
+      quality: d?.qualityMetrics || null,
+    });
+  }, [d, cards, resolvedSsvi]);
+
+  const metrics = compliance.metrics;
+  const composite = compliance.composite;
+  const categories = useMemo(() => (composite.signals || []).map((s) => signalToCategory(s, metrics)), [composite, metrics]);
+
   const hasAnyData = analysisData || storedAnalysis || ccnResult;
+  const findings = d?.criticalFindings || [];
+  const quality = d?.qualityMetrics || {};
+  const agencyName = ccnResult?.hospice_name || d?.agencyName || clinicName || "Unknown Agency";
 
   if (!hasAnyData) {
     return (
       <div className="space-y-6">
-        {/* Empty state hero */}
         <div className="rounded-2xl p-10 text-center" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: "#F7F0E1" }}>
             <ShieldCheck size={28} color="#B8863F" />
@@ -1220,16 +1250,14 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
             Welcome to Connect Shield
           </div>
           <p className="text-sm max-w-lg mx-auto" style={{ color: "#64708A" }}>
-            Your executive compliance intelligence platform. Enter your CCN below for instant SSVI lookup, or upload your CMS reports for a full AI-powered compliance analysis.
+            Your executive compliance intelligence platform. Enter your CCN below for instant SSVI lookup, or upload your CMS reports for a full compliance analysis.
           </p>
         </div>
 
-        {/* CCN lookup on dashboard */}
         <div className="rounded-2xl p-6" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
           <CCNLookup onSSVIData={(data) => { setCcnResult(data); }} />
         </div>
 
-        {/* Quick stats placeholder */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {["SSVI Score", "CAP Utilization", "RN Intensity", "Compliance Index"].map(label => (
             <div key={label} className="rounded-xl p-4" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED" }}>
@@ -1243,20 +1271,18 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
     );
   }
 
-  const d = analysisData || storedAnalysis;
-  const cap = d?.capData || {};
-  const metrics = d?.psrMetrics || {};
-  const quality = d?.qualityMetrics || {};
-  const categories = d?.complianceCategories || [];
-  const findings = d?.criticalFindings || [];
-
-  // Merge real SSVI data if available — resolveSSVI picks FY2025, or FY2024 when 2025 isn't published.
-  const resolvedSsvi = resolveSSVI(ccnResult);
-  const isRealSsvi = resolvedSsvi != null;
-  const effectiveSsviScore = resolvedSsvi?.total ?? d?.ssviScore;
-  const effectiveSsviUtil = resolvedSsvi?.utilization ?? d?.ssviUtilizationScore;
-  const effectiveSsviSpend = resolvedSsvi?.spending ?? d?.ssviSpendingScore;
-  const agencyName = ccnResult?.hospice_name || d?.agencyName || "Unknown Agency";
+  // What the PDF consumes. Scores and derived figures are the computed ones;
+  // only extracted values and findings come from the stored analysis.
+  const derived = {
+    ...(d || {}),
+    agencyName,
+    psrMetrics: metrics,
+    capData: metrics,
+    overallComplianceScore: composite.score ?? 0,
+    overallRiskLevel: compliance.riskLevel,
+    complianceCategories: categories,
+    criticalFindings: findings,
+  };
 
   return (
     <div className="space-y-5">
@@ -1264,12 +1290,11 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
         <div className="rounded-xl p-3 flex items-start gap-3" style={{ background: "#FEF3E2", border: "1px solid #F0C87A" }}>
           <AlertCircle size={15} color="#C98A1F" className="shrink-0 mt-0.5" />
           <div className="text-sm" style={{ color: "#7A5700" }}>
-            <strong>Tip:</strong> Upload both PS&R Report 810 and Beneficiary Count report together for the most complete analysis. Enter your CCN above for actual published SSVI scores.
+            <strong>Tip:</strong> Upload both PS&R Report 810 and the Beneficiary Count report together for the most complete analysis. Enter your CCN above for actual published SSVI scores.
           </div>
         </div>
       )}
 
-      {/* CCN lookup bar — hidden when the clinic's own CCN is auto-loaded */}
       {!hideLookup && (
         <div className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
           <CCNLookup onSSVIData={(data) => setCcnResult(data)} />
@@ -1277,94 +1302,105 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
       )}
 
       {/* Main scorecard */}
-      {d && (
-        <div className="rounded-2xl p-6" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
-          <div className="flex items-start gap-5 flex-wrap">
-            {d.overallComplianceScore > 0 && <ScoreRing score={d.overallComplianceScore} size={96} stroke={9} />}
-            <div className="flex-1 min-w-0">
-              <div className="text-xs uppercase tracking-widest font-mono" style={{ color: "#64708A" }}>Composite Compliance Index</div>
-              <div className="text-2xl mt-1" style={{ fontFamily: "Fraunces, serif", color: "#16202E" }}>{agencyName}</div>
-              {d.reportPeriod && <div className="text-sm mt-0.5 font-mono" style={{ color: "#64708A" }}>Period: {d.reportPeriod}</div>}
-              {d.overallRiskLevel && <div className="mt-2"><RiskBadge level={d.overallRiskLevel} clawback={cap.capExposure || 0} /></div>}
-            </div>
+      <div className="rounded-2xl p-6" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
+        <div className="flex items-start gap-5 flex-wrap">
+          {composite.score != null && <ScoreRing score={composite.score} size={96} stroke={9} />}
+          <div className="flex-1 min-w-0">
+            <div className="text-xs uppercase tracking-widest font-mono" style={{ color: "#64708A" }}>Composite Compliance Index</div>
+            <div className="text-2xl mt-1" style={{ fontFamily: "Fraunces, serif", color: "#16202E" }}>{agencyName}</div>
+            {d?.reportPeriod && <div className="text-sm mt-0.5 font-mono" style={{ color: "#64708A" }}>Period: {d.reportPeriod}</div>}
+            {compliance.riskLevel && <div className="mt-2"><RiskBadge level={compliance.riskLevel} clawback={metrics.capExposure > 0 ? metrics.capExposure : 0} /></div>}
+            {composite.score == null && (
+              <div className="text-sm mt-2" style={{ color: "#8992A3" }}>
+                Not yet calculated — upload a PS&R Report 810 and Beneficiary Count report, or enter your CCN.
+              </div>
+            )}
           </div>
-          {d.reportsAnalyzed?.length > 0 && (
-            <div className="flex gap-2 mt-4 flex-wrap">
-              {d.reportsAnalyzed.map(r => (
-                <span key={r} className="text-xs font-mono px-2 py-1 rounded"
-                  style={{ background: "#EAF6EF", color: "#2E9E62", border: "1px solid #A8DFC0" }}>✓ {r}</span>
-              ))}
-              {isRealSsvi && (
-                <span className="text-xs font-mono px-2 py-1 rounded"
-                  style={{ background: "#F7F0E1", color: "#B8863F", border: "1px solid #E8CFA0" }}>✓ CMS SSVI Score (CCN {ccnResult.ccn})</span>
-              )}
-            </div>
-          )}
-          {categories.length > 0 && (
-            <div className="w-full flex flex-wrap gap-2 pt-4 mt-4 border-t" style={{ borderColor: "#E3E7ED" }}>
-              {categories.map(c => (
-                <button key={c.id} onClick={() => setOpenId(openId === c.id ? null : c.id)}
-                  className="text-left rounded-lg px-3 py-2 transition-colors"
-                  style={{ background: openId === c.id ? "#F7F0E1" : "transparent", border: `1px solid ${openId === c.id ? "#E8CFA0" : "#E3E7ED"}`, flex: "1 1 140px", minWidth: 0 }}>
-                  <div className="text-[11px] font-mono truncate" style={{ color: "#64708A" }}>{c.label}</div>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-lg font-mono" style={{ color: scoreColor(c.score) }}>{c.score}</span>
-                    {c.clawbackAmount > 0 && <span className="text-[11px] font-mono" style={{ color: "#D14343" }}>⚠ {fmtD(c.clawbackAmount)}</span>}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
-      )}
 
-      {/* Download this dashboard as a branded, source-stamped PDF */}
+        {composite.score != null && (
+          <div className="mt-4 flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-mono px-2 py-1 rounded" style={{ background: "#F5F6F8", color: "#64708A" }}>
+              Computed from {composite.coverage.counted} of {composite.coverage.possible} signals
+            </span>
+            {composite.provisional && (
+              <span className="text-[11px] font-mono px-2 py-1 rounded" style={{ background: "#FEF3E2", color: "#7A5700" }}>
+                Provisional — limited data on file
+              </span>
+            )}
+            {composite.ceiling && (
+              <span className="text-[11px] font-mono px-2 py-1 rounded" style={{ background: "#FDECEA", color: "#D14343" }}>
+                Capped at {composite.ceiling.max}: {composite.ceiling.reason}
+              </span>
+            )}
+            {isRealSsvi && (
+              <span className="text-[11px] font-mono px-2 py-1 rounded" style={{ background: "#F7F0E1", color: "#B8863F", border: "1px solid #E8CFA0" }}>✓ CMS SSVI (CCN {ccnResult.ccn})</span>
+            )}
+            {d?.reportsAnalyzed?.map(r => (
+              <span key={r} className="text-[11px] font-mono px-2 py-1 rounded"
+                style={{ background: "#EAF6EF", color: "#2E9E62", border: "1px solid #A8DFC0" }}>✓ {r}</span>
+            ))}
+          </div>
+        )}
+
+        {categories.length > 0 && (
+          <div className="w-full flex flex-wrap gap-2 pt-4 mt-4 border-t" style={{ borderColor: "#E3E7ED" }}>
+            {categories.map(c => (
+              <button key={c.id} onClick={() => setOpenId(openId === c.id ? null : c.id)}
+                className="text-left rounded-lg px-3 py-2 transition-colors"
+                style={{ background: openId === c.id ? "#F7F0E1" : "transparent", border: `1px solid ${openId === c.id ? "#E8CFA0" : "#E3E7ED"}`, flex: "1 1 140px", minWidth: 0 }}>
+                <div className="text-[11px] font-mono truncate" style={{ color: "#64708A" }}>{c.label}</div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-lg font-mono" style={{ color: scoreColor(c.score) }}>{c.score}</span>
+                  {c.clawbackAmount > 0 && <span className="text-[11px] font-mono" style={{ color: "#D14343" }}>⚠ {fmtD(c.clawbackAmount)}</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       <ReportDownloadModal
         clinicId={clinicId}
         clinicName={clinicName || agencyName}
         ccn={ccnResult?.ccn || d?.providerNumber || ""}
-        analysis={d}
+        analysis={derived}
         ssvi={resolvedSsvi}
         ssviMeasures={SSVI_MEASURES}
       />
 
-      {/* Compliance Cards — persisted latest-of-each-type from Supabase */}
-      <ComplianceCardsRow clinicId={clinicId} />
+      <ComplianceCardsRow cards={cards} loading={cardsLoading} metrics={metrics} />
 
-      {/* SSVI Full Breakdown */}
-      <SSVIBreakdownPanel
-        ssviData={isRealSsvi ? ccnResult : null}
-        estimatedData={d ? { ssviScore: effectiveSsviScore, ssviUtilizationScore: effectiveSsviUtil, ssviSpendingScore: effectiveSsviSpend } : null}
-      />
+      <SSVIBreakdownPanel ssviData={isRealSsvi ? ccnResult : null} />
 
       {/* CAP */}
-      {(cap.capLimit != null || cap.netReimbursement != null) && (
+      {(metrics.capLimit != null || metrics.netReimbursement != null) && (
         <div className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
             <PieChart size={16} color="#B8863F" />
-            <span style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-lg">Medicare Aggregate CAP — Cap Year {cap.capYear}</span>
-            {cap.capExposure > 0 && <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: "#FDECEA", color: "#D14343" }}>🔴 EXCEEDED</span>}
+            <span style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-lg">Medicare Aggregate CAP — Cap Year {metrics.capYear || "—"}</span>
+            {metrics.capExposure > 0 && <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: "#FDECEA", color: "#D14343" }}>🔴 EXCEEDED</span>}
           </div>
-          {cap.capUtilizationPct != null && (
+          {metrics.capUtilizationPct != null && (
             <>
               <div className="flex justify-between mb-1">
                 <span className="text-sm font-mono" style={{ color: "#16202E" }}>Cap Utilization</span>
-                <span className="text-sm font-mono font-bold" style={{ color: cap.capUtilizationPct >= 100 ? "#D14343" : cap.capUtilizationPct >= 85 ? "#C98A1F" : "#2E9E62" }}>
-                  {Number(cap.capUtilizationPct).toFixed(1)}%
+                <span className="text-sm font-mono font-bold" style={{ color: metrics.capUtilizationPct >= 100 ? "#D14343" : metrics.capUtilizationPct >= 85 ? "#C98A1F" : "#2E9E62" }}>
+                  {Number(metrics.capUtilizationPct).toFixed(1)}%
                 </span>
               </div>
               <div className="w-full rounded-full h-2.5" style={{ background: "#E3E7ED" }}>
                 <div className="h-2.5 rounded-full transition-all"
-                  style={{ width: `${Math.min(cap.capUtilizationPct, 100)}%`, background: cap.capUtilizationPct >= 100 ? "#D14343" : cap.capUtilizationPct >= 85 ? "#C98A1F" : "#2E9E62" }} />
+                  style={{ width: `${Math.min(metrics.capUtilizationPct, 100)}%`, background: metrics.capUtilizationPct >= 100 ? "#D14343" : metrics.capUtilizationPct >= 85 ? "#C98A1F" : "#2E9E62" }} />
               </div>
             </>
           )}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
             {[
-              { label: "Total Beneficiaries", value: cap.totalBeneficiaryCount ? Number(cap.totalBeneficiaryCount).toFixed(4) : "—", warn: false },
-              { label: "Per-Beneficiary Cap", value: fmtD(cap.perBeneficiaryCap), warn: false },
-              { label: "Aggregate Cap Limit", value: fmtD(cap.capLimit), warn: false },
-              { label: "Net Reimbursement", value: fmtD(cap.netReimbursement), warn: cap.capExposure > 0 },
+              { label: "Total Beneficiaries", value: metrics.totalBeneficiaryCount != null ? Number(metrics.totalBeneficiaryCount).toFixed(4) : "—", warn: false },
+              { label: "Per-Beneficiary Cap", value: fmtD(metrics.perBeneficiaryCap), warn: false },
+              { label: "Aggregate Cap Limit", value: fmtD(metrics.capLimit), warn: false },
+              { label: "Net Reimbursement", value: fmtD(metrics.netReimbursement), warn: metrics.capExposure > 0 },
             ].map((m, i) => (
               <div key={i} className="rounded-xl p-3" style={{ background: m.warn ? "#FEF3E2" : "#F5F6F8" }}>
                 <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>{m.label}</div>
@@ -1372,23 +1408,28 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
               </div>
             ))}
           </div>
-          {cap.capExposure > 0 && (
-            <div className="mt-3 p-4 rounded-xl" style={{ background: "#FDECEA", border: "1px solid #F3B8AC" }}>
-              <div className="text-sm font-semibold" style={{ color: "#D14343" }}>🔴 CAP EXCEEDED — {fmtD(cap.capExposure)} owed to CMS</div>
-              <div className="text-sm mt-1" style={{ color: "#B23A2E" }}>Net reimbursement exceeds aggregate cap. CMS will initiate clawback. Remittance required within 60 days of cap year close. Contact your MAC immediately.</div>
+          {(metrics.reimbursementPeriod || metrics.capYearPeriod) && (
+            <div className="mt-3 text-[11px] font-mono rounded-lg px-3 py-2" style={{ background: "#F5F6F8", color: "#64708A" }}>
+              Basis: reimbursement covers {metrics.reimbursementPeriod || "—"}; cap year covers {metrics.capYearPeriod || "—"}.
             </div>
           )}
-          {!cap.capExposure && cap.capLimit > 0 && cap.netReimbursement > 0 && (
+          {metrics.capExposure > 0 && (
+            <div className="mt-3 p-4 rounded-xl" style={{ background: "#FDECEA", border: "1px solid #F3B8AC" }}>
+              <div className="text-sm font-semibold" style={{ color: "#D14343" }}>🔴 CAP EXCEEDED — {fmtD(metrics.capExposure)} above the aggregate cap limit</div>
+              <div className="text-sm mt-1" style={{ color: "#B23A2E" }}>Net reimbursement exceeds the aggregate cap. Amounts above the cap are repayable to CMS after cap year close. Confirm against your MAC cap determination.</div>
+            </div>
+          )}
+          {!(metrics.capExposure > 0) && metrics.capLimit > 0 && metrics.netReimbursement > 0 && (
             <div className="mt-3 p-3 rounded-xl flex items-center gap-3" style={{ background: "#EAF6EF", border: "1px solid #A8DFC0" }}>
               <CheckCircle2 size={16} color="#2E9E62" className="shrink-0" />
-              <div className="text-sm" style={{ color: "#1A6E41" }}>Under cap. Remaining headroom: {fmtD(cap.capLimit - cap.netReimbursement)}.</div>
+              <div className="text-sm" style={{ color: "#1A6E41" }}>Under cap. Remaining headroom: {fmtD(metrics.capLimit - metrics.netReimbursement)}.</div>
             </div>
           )}
         </div>
       )}
 
-      {/* PS&R Key Metrics */}
-      {metrics && Object.values(metrics).some(v => v != null) && (
+      {/* PS&R Leading Indicators */}
+      {metrics.totalMedicareDays != null && (
         <div className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
           <div className="flex items-center gap-2 mb-3">
             <Activity size={16} color="#B8863F" />
@@ -1403,7 +1444,7 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
               { label: "RN Intensity", value: metrics.rnUnitsPerDay != null ? `${metrics.rnUnitsPerDay} u/day` : "—", warn: metrics.rnUnitsPerDay < 1.0, sub: metrics.rnUnitsPerDay < 1.0 ? "⚠ Below 1.0 SSVI threshold" : "≥1.0 passing" },
               { label: "Total Claims", value: metrics.totalClaims != null ? fmt(metrics.totalClaims) : "—", warn: false, sub: "Medicare claims filed" },
               { label: "Gross Reimbursement", value: fmtD(metrics.grossReimbursement), warn: false, sub: "Before sequestration" },
-              { label: "Net Reimbursement", value: fmtD(metrics.netReimbursement), warn: false, sub: "After 2% sequestration" },
+              { label: "Net Reimbursement", value: fmtD(metrics.netReimbursement), warn: false, sub: "After sequestration" },
             ].map((m, i) => (
               <div key={i} className="rounded-xl p-3" style={{ background: m.warn ? "#FEF3E2" : "#F5F6F8" }}>
                 <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>{m.label}</div>
@@ -1412,6 +1453,11 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
               </div>
             ))}
           </div>
+          {metrics.reimbursementPeriod && (
+            <div className="mt-3 text-[11px] font-mono" style={{ color: "#8992A3" }}>
+              All figures from the PS&R period {metrics.reimbursementPeriod}.
+            </div>
+          )}
         </div>
       )}
 
@@ -1442,9 +1488,10 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
       {/* Critical Findings */}
       {findings.length > 0 && (
         <div className="rounded-2xl p-5 space-y-3" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <AlertTriangle size={16} color="#D14343" />
             <span style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-lg">Critical Findings</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "#F7F0E1", color: "#B8863F" }}>Connect Shield analysis</span>
             <span className="text-xs font-mono px-2 py-0.5 rounded ml-auto" style={{ background: "#FDECEA", color: "#D14343" }}>{findings.filter(f => f.severity === "high").length} High Priority</span>
           </div>
           {findings.map((f, i) => (
@@ -1461,7 +1508,7 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
                 {f.clawbackRisk > 0 && (
                   <div className="mt-1.5 inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded"
                     style={{ background: "#FDECEA", color: "#D14343" }}>
-                    <DollarSign size={11} />Clawback Risk: {fmtD(f.clawbackRisk)}
+                    <DollarSign size={11} />Exposure: {fmtD(f.clawbackRisk)}
                   </div>
                 )}
               </div>
@@ -1470,10 +1517,10 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
         </div>
       )}
 
-      {/* Category Drill-Down */}
+      {/* How the index was calculated */}
       {categories.length > 0 && (
         <div className="space-y-2">
-          <div className="text-xs uppercase tracking-widest font-mono px-1" style={{ color: "#64708A" }}>Compliance Category Breakdown</div>
+          <div className="text-xs uppercase tracking-widest font-mono px-1" style={{ color: "#64708A" }}>How the Composite Index Was Calculated</div>
           {categories.map(cat => {
             const open = openId === cat.id;
             return (
@@ -1500,11 +1547,11 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
                   <div className="px-4 pb-5 pt-1 space-y-4" style={{ borderTop: "1px solid #E3E7ED" }}>
                     {cat.factors?.length > 0 && (
                       <div>
-                        <div className="text-xs uppercase tracking-widest font-mono mt-3 mb-2" style={{ color: "#64708A" }}>Scoring Factors</div>
+                        <div className="text-xs uppercase tracking-widest font-mono mt-3 mb-2" style={{ color: "#64708A" }}>Scoring Basis</div>
                         <div className="space-y-2">
                           {cat.factors.map((f, i) => (
                             <div key={i} className="flex items-start gap-3">
-                              <div className="w-9 shrink-0 text-right text-[11px] font-mono pt-0.5" style={{ color: "#8992A3" }}>{f.weight}%</div>
+                              <div className="w-9 shrink-0 text-right text-[11px] font-mono pt-0.5" style={{ color: "#8992A3" }}>{f.weight ? `${f.weight}` : ""}</div>
                               <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: statusColor(f.status) }} />
                               <div className="flex-1">
                                 <div className="text-sm" style={{ color: "#16202E" }}>{f.label}</div>
@@ -1513,18 +1560,6 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
                             </div>
                           ))}
                         </div>
-                      </div>
-                    )}
-                    {cat.actions?.length > 0 && (
-                      <div>
-                        <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#B8863F" }}>Recommended Actions</div>
-                        <ul className="space-y-1.5">
-                          {cat.actions.map((a, i) => (
-                            <li key={i} className="text-sm flex gap-2" style={{ color: "#16202E" }}>
-                              <CheckCircle2 size={14} className="shrink-0 mt-0.5" color="#2E9E62" />{a}
-                            </li>
-                          ))}
-                        </ul>
                       </div>
                     )}
                   </div>
@@ -1646,34 +1681,36 @@ function DocumentsHub({ clinicId, onAnalysisData }) {
         try {
           const summaries = {};
           complianceFiles.forEach(({ file, text, type }) => {
-            summaries[type] = (summaries[type] || "") + `\n\n=== ${file.name} ===\n${(text || "").substring(0, 2500)}`;
+            summaries[type] = (summaries[type] || "") + `\n\n=== ${file.name} ===\n${(text || "").substring(0, 3500)}`;
           });
           const reportsFound = Object.keys(summaries);
-          const combined = Object.entries(summaries).map(([t, txt]) => `\n\n====== ${t.toUpperCase()} REPORT ======\n${txt}`).join("\n").substring(0, 6000);
+          const combined = Object.entries(summaries).map(([t, txt]) => `\n\n====== ${t.toUpperCase()} REPORT ======\n${txt}`).join("\n").substring(0, 9000);
           const header = `REPORTS: ${reportsFound.join(", ")}\n\n`;
-          const part1 = await callClaudeWithRetry(SYSTEM_PROMPT_1, header + combined, 4000, 3);
-          const context2 = `AGENCY: ${part1.agencyName}\nSCORE: ${part1.overallComplianceScore}\nRN: ${part1.psrMetrics?.rnUnitsPerDay}\nCAP: ${fmtD(part1.capData?.capExposure)}\nSSVI: ${part1.ssviScore}/16\n\n${header}${combined}`;
-          const part2 = await callClaudeWithRetry(SYSTEM_PROMPT_2, context2, 3000, 3);
-          const seen = new Set();
-          const cats = [...(part1.complianceCategories || []), ...(part2.complianceCategories || [])].filter((c) => c && c.id && !seen.has(c.id) && seen.add(c.id));
-          const merged = {
-            ...part1,
-            reportsAnalyzed: reportsFound.map(getReportTypeLabel),
-            complianceCategories: cats,
-            criticalFindings: part2.criticalFindings || [],
-          };
+
+          // Step 1 — extraction only. No arithmetic, no scores.
+          const part1 = await callClaudeWithRetry(SYSTEM_PROMPT_1, header + combined, 3000, 3);
+          const merged = { ...part1, reportsAnalyzed: reportsFound.map(getReportTypeLabel) };
+
+          // Step 2 — compute every derived figure in code, then hand the RESULT
+          // to the model so findings can only cite numbers that were calculated.
+          try {
+            const calc = computeCompliance({ raw: { ...(merged.psrMetrics || {}), ...(merged.capData || {}) } });
+            const factSheet = `EXTRACTED AND CALCULATED FIGURES:\n${JSON.stringify({ metrics: calc.metrics, compositeIndex: calc.composite.score, coverage: calc.composite.coverage }, null, 1)}`;
+            const part2 = await callClaudeWithRetry(SYSTEM_PROMPT_2, factSheet, 1500, 2);
+            merged.criticalFindings = Array.isArray(part2.criticalFindings) ? part2.criticalFindings : [];
+          } catch (e) {
+            console.error("[documents] findings failed", e);
+            merged.criticalFindings = [];
+          }
+
           await saveReportCards({ supabase, clinicId, merged });
-          // Persist the FULL analysis so the entire dashboard (composite score,
-          // leading indicators, CAP/PS&R detail, findings) survives a reload — not
-          // just the per-type cards. Stored under a "composite" type that the cards
-          // row ignores; the Dashboard loads it on mount. Date-aware like the rest.
           await upsertReportCard({
             supabase, clinicId, reportType: "composite", analysis: merged,
             reportDate: bestReportDate(merged.reportPeriodEnd, merged.reportPeriod),
             reportPeriodLabel: merged.reportPeriod || null,
           });
-          if (onAnalysisData) onAnalysisData(merged); // updates the in-session scorecard/tiles
-        } catch (e) { console.error("[documents] compliance analysis failed", e); }
+          if (onAnalysisData) onAnalysisData(merged);
+        } catch (e) { console.error("[documents] extraction failed", e); }
       }
 
       const cahps = stored.find((s) => s.type === "cahps");
@@ -2630,7 +2667,20 @@ function Atlas({ analysisData, ssviData, clinicId }) {
       if (flagged.length > 0) ctx += `Flagged measures (FY${ssviResolved.year}): ${flagged.join(", ")}\n`;
     }
     if (analysisData) {
-      ctx += `Agency: ${analysisData.agencyName}\nSSVI estimated: ${analysisData.ssviScore}/16\nCompliance Score: ${analysisData.overallComplianceScore}/100\nRisk: ${analysisData.overallRiskLevel}\nCAP Exposure: ${fmtD(analysisData.capData?.capExposure || 0)}\nRN Intensity: ${analysisData.psrMetrics?.rnUnitsPerDay} units/day\n`;
+      // Recompute rather than quoting stored numbers, so Atlas can never cite a
+      // figure that disagrees with the dashboard.
+      try {
+        const calc = computeCompliance({
+          raw: { ...(analysisData.psrMetrics || {}), ...(analysisData.capData || {}) },
+          ssvi: ssviResolved,
+        });
+        const m = calc.metrics;
+        ctx += `Agency: ${analysisData.agencyName}\nComposite Compliance Index: ${calc.composite.score ?? "not calculated"}/100 (${calc.riskLevel ?? "n/a"} risk, computed from ${calc.composite.coverage.counted} of ${calc.composite.coverage.possible} signals)\n`;
+        ctx += `Medicare days: ${m.totalMedicareDays}\nUnduplicated census: ${m.totalUnduplicatedCensus}\nAverage length of stay: ${m.avgLengthOfStay} days\nRN intensity: ${m.rnUnitsPerDay} units per Medicare day\nNet reimbursement: ${m.netReimbursement}\nAggregate cap limit: ${m.capLimit}\nCAP exposure: ${m.capExposure}\nCAP utilization: ${m.capUtilizationPct}%\n`;
+        if (m.reimbursementPeriod || m.capYearPeriod) ctx += `Basis: reimbursement covers ${m.reimbursementPeriod || "unknown"}; cap year covers ${m.capYearPeriod || "unknown"}\n`;
+      } catch (e) {
+        ctx += `Agency: ${analysisData.agencyName}\n`;
+      }
       if (analysisData.criticalFindings?.length > 0) ctx += `Critical Findings: ${analysisData.criticalFindings.map(f => `[${f.severity}] ${f.finding}`).join(" | ")}\n`;
     }
     if (libraryDocs.length > 0) {
@@ -2656,6 +2706,8 @@ function Atlas({ analysisData, ssviData, clinicId }) {
 ${buildContext()}
 
 Answer questions about PS&R Report 810, the Beneficiary Count report, PEPPER, CAHPS, QAPI, survey deficiencies, SSVI scoring (0-16, lower is better, national avg 6.42, 8 claims-based utilization measures each worth 1 point plus a non-hospice spending score 0-8), MAC/RAC audits, CAP exposure, and Medicare Hospice CoP. Reference revenue codes (0551=SN visits 15-min, 0651=RHC days) and dollar amounts from this clinic's data.
+
+Never calculate a new figure. Use only the numbers listed above; if a number is not there, say it is not on file rather than working it out. The Composite Compliance Index is Connect Shield's own metric, not a CMS score — say so if asked.
 
 Formatting: Write in clean, plain prose using complete sentences and short paragraphs. Do NOT use any markdown — no asterisks or ** bold, no # headers, no bullet dashes, no backticks, and no emojis. If listing items, use a natural sentence or plain separate lines. Keep answers under 200 words, conversational but precise.`;
       const reply = await callClaude(system, q, 600);
