@@ -9,6 +9,7 @@ import {
   Trash2, Eye, Search, Bot, Activity, Target, Zap, LogOut, ExternalLink,
 } from "lucide-react";
 import { createClient } from "@/lib/auth/client";
+import ReportDownloadModal from "@/components/ReportDownloadModal";
 const FONT_IMPORT = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 `;
@@ -546,6 +547,9 @@ const SYSTEM_PROMPT_2 = `You are a Medicare hospice compliance expert. Generate 
 Use real numbers from the report data provided.`;
 
 // ─── SSVI MEASURE DEFINITIONS ─────────────────────────────────────────────────
+// These are the EIGHT claims-based utilization measures that make up the SSVI
+// utilization score (0-8). The non-hospice spending score (0-8) is calculated
+// separately by CMS and is NOT in this array — together they total 0-16.
 const SSVI_MEASURES = [
   { key: "no_chc_gip", label: "No CHC or GIP Days", description: "Hospice billed no continuous home care or general inpatient days", flagThreshold: "Flagged if hospice has zero CHC and zero GIP days", remedy: "Ensure crisis care levels are being utilized and documented appropriately for eligible patients" },
   { key: "nursing_facility", label: "RHC Days in Nursing Facility", description: "Percentage of routine home care days delivered in a nursing facility", flagThreshold: "Flagged at ≥40% of RHC days in nursing facility", remedy: "Review patient mix and ensure community-based patients are being admitted appropriately" },
@@ -772,7 +776,7 @@ function SSVIBreakdownPanel({ ssviData, estimatedData }) {
             <div className="rounded-xl p-4" style={{ background: "#F5F6F8" }}>
               <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>Utilization Score</div>
               <div className="text-2xl font-mono mt-1" style={{ color: ssviColor(dispUtil || 0) }}>{dispUtil ?? "—"}<span className="text-sm">/8</span></div>
-              <div className="text-xs font-mono mt-0.5" style={{ color: "#64708A" }}>Based on 8 claims-based utilization measures</div>
+              <div className="text-xs font-mono mt-0.5" style={{ color: "#64708A" }}>Based on {SSVI_MEASURES.length} claims-based utilization measures</div>
             </div>
             <div className="rounded-xl p-4" style={{ background: "#F5F6F8" }}>
               <div className="text-[11px] font-mono" style={{ color: "#8992A3" }}>Non-Hospice Spending Score{!hasReal && " (est.)"}</div>
@@ -781,10 +785,10 @@ function SSVIBreakdownPanel({ ssviData, estimatedData }) {
             </div>
           </div>
 
-          {/* 9 Measures breakdown */}
+          {/* Utilization measures breakdown */}
           <div>
             <div className="text-xs uppercase tracking-widest font-mono mb-3" style={{ color: "#64708A" }}>
-              The 9 CMS SSVI Measures — FY{dispYear} Scoring Breakdown
+              The {SSVI_MEASURES.length} CMS SSVI Utilization Measures — FY{dispYear} Scoring Breakdown
             </div>
             <div className="space-y-3">
               {SSVI_MEASURES.map((measure, i) => {
@@ -854,7 +858,7 @@ function SSVIBreakdownPanel({ ssviData, estimatedData }) {
           {!hasReal && (
             <div className="rounded-xl p-3" style={{ background: "#F5F6F8" }}>
               <div className="text-xs font-mono" style={{ color: "#64708A" }}>
-                <strong>To see actual CMS measure flags:</strong> Enter your CCN in the lookup field above. Your actual published SSVI score will replace this estimate and show exactly which of the 9 measures you were flagged on with your specific values.
+                <strong>To see actual CMS measure flags:</strong> Enter your CCN in the lookup field above. Your actual published SSVI score will replace this estimate and show exactly which of the {SSVI_MEASURES.length} utilization measures you were flagged on with your specific values.
               </div>
             </div>
           )}
@@ -1063,7 +1067,7 @@ function ComplianceCardsRow({ clinicId }) {
                   {ta.value ? <div className="text-xs font-mono" style={{ color: "#64708A" }}>{ta.value}</div> : null}
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-sm font-mono" style={{ color }}>{ta.percentile != null ? `${ta.percentile}th pct` : "—"}</div>
+                  <div className="text-sm font-mono" style={{ color }}>{ta.percentile != null ? `${ordinalPct(ta.percentile)} pct` : "—"}</div>
                   {high && <div className="text-[10px] font-mono" style={{ color: "#D14343" }}>⚠ high outlier</div>}
                   {low && <div className="text-[10px] font-mono" style={{ color: "#C98A1F" }}>low outlier</div>}
                 </div>
@@ -1163,8 +1167,17 @@ function ComplianceCardsRow({ clinicId }) {
   );
 }
 
+// Correct English ordinal for a percentile — "1st pct", not "1th pct".
+function ordinalPct(n) {
+  if (n == null || isNaN(Number(n))) return "—";
+  const i = Math.round(Number(n));
+  const v = i % 100;
+  if (v >= 11 && v <= 13) return `${i}th`;
+  return `${i}${["th", "st", "nd", "rd"][i % 10] || "th"}`;
+}
+
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard({ analysisData, ssviData, hideLookup, clinicId }) {
+function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName }) {
   const [supabase] = useState(() => createClient());
   const [openId, setOpenId] = useState(null);
   const [ccnResult, setCcnResult] = useState(ssviData);
@@ -1304,6 +1317,16 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId }) {
           )}
         </div>
       )}
+
+      {/* Download this dashboard as a branded, source-stamped PDF */}
+      <ReportDownloadModal
+        clinicId={clinicId}
+        clinicName={clinicName || agencyName}
+        ccn={ccnResult?.ccn || d?.providerNumber || ""}
+        analysis={d}
+        ssvi={resolvedSsvi}
+        ssviMeasures={SSVI_MEASURES}
+      />
 
       {/* Compliance Cards — persisted latest-of-each-type from Supabase */}
       <ComplianceCardsRow clinicId={clinicId} />
@@ -2309,7 +2332,7 @@ const REG_UPDATES = [
     checklist:["Update intake SOP so addendum trigger fires at election.","Retrain admissions staff on the 3-day window.","Audit last 30 days of elections for addendum timing gaps."] },
   { id:"r2", date:"2026-06-10", source:"CMS", tag:"Payment / Billing", severity:"high",
     title:"FY2027 Hospice Proposed Rule — SSVI introduced as public scoring tool",
-    summary:"CMS introduced the SSVI (0-16 scale) built from 9 claims-based measures. Utilization Score (0-8) covers RN visit intensity, LOS, live discharge, GIP ratio, weekend visits, end-of-life patterns. Non-Hospice Spending Score (0-8) covers Part A/B spending. Scores posted publicly.",
+    summary:"CMS introduced the SSVI (0-16 scale) built from 8 claims-based utilization measures plus a non-hospice spending score. Utilization Score (0-8) covers RN visit intensity, LOS, live discharge, GIP ratio, weekend visits, end-of-life patterns. Non-Hospice Spending Score (0-8) covers Part A/B spending. Scores posted publicly.",
     impact:"Scores ≥10 signal meaningful deviation and may trigger program integrity review. Enter your CCN in Connect Shield for instant SSVI lookup.",
     checklist:["Enter your CCN in Connect Shield for instant SSVI score.","Review RN intensity — Rev 0551 units ÷ Medicare days. Under 1.0 is flagged.","Pull PS&R Report 810 and Beneficiary Count report from CASPER and upload.","Review all 8 utilization measures in your Connect Shield SSVI breakdown.","Brief your clinical team on weekend visit and end-of-life visit requirements."] },
   { id:"r3", date:"2026-05-14", source:"OIG", tag:"Program Integrity", severity:"medium",
@@ -2632,7 +2655,7 @@ function Atlas({ analysisData, ssviData, clinicId }) {
 
 ${buildContext()}
 
-Answer questions about PS&R Report 810, the Beneficiary Count report, PEPPER, CAHPS, QAPI, survey deficiencies, SSVI scoring (0-16, lower is better, national avg 6.42, 9 utilization measures each worth 1 point plus non-hospice spending score 0-8), MAC/RAC audits, CAP exposure, and Medicare Hospice CoP. Reference revenue codes (0551=SN visits 15-min, 0651=RHC days) and dollar amounts from this clinic's data.
+Answer questions about PS&R Report 810, the Beneficiary Count report, PEPPER, CAHPS, QAPI, survey deficiencies, SSVI scoring (0-16, lower is better, national avg 6.42, 8 claims-based utilization measures each worth 1 point plus a non-hospice spending score 0-8), MAC/RAC audits, CAP exposure, and Medicare Hospice CoP. Reference revenue codes (0551=SN visits 15-min, 0651=RHC days) and dollar amounts from this clinic's data.
 
 Formatting: Write in clean, plain prose using complete sentences and short paragraphs. Do NOT use any markdown — no asterisks or ** bold, no # headers, no bullet dashes, no backticks, and no emojis. If listing items, use a natural sentence or plain separate lines. Keep answers under 200 words, conversational but precise.`;
       const reply = await callClaude(system, q, 600);
@@ -2917,7 +2940,7 @@ export default function ConnectShield({ initialCcn = null, clinicName = null, cl
       <main className="flex-1 min-w-0 overflow-y-auto">
         <InstallBanner />
         <div className={`${CONTENT_MAX_W[tab] || "max-w-5xl"} mx-auto px-4 md:px-8 py-4 md:py-6 pb-28 md:pb-10`}>
-          {tab === "dashboard" && <Dashboard analysisData={analysisData} ssviData={ssviData} hideLookup={lockedCcn} clinicId={clinicId} />}
+          {tab === "dashboard" && <Dashboard analysisData={analysisData} ssviData={ssviData} hideLookup={lockedCcn} clinicId={clinicId} clinicName={clinicName} />}
           {tab === "documents" && <DocumentsHub clinicId={clinicId} onAnalysisData={setAnalysisData} />}
           {tab === "chart" && <ChartReview />}
           {tab === "reg" && <RegulatoryWatch clinicId={clinicId} />}
