@@ -89,6 +89,7 @@ function safeDefault(overrides = {}) {
     agencyName: "Unknown Agency", providerNumber: "", reportPeriod: "", reportPeriodEnd: "",
     reportsAnalyzed: [],
     capData: { capYear: "", capYearPeriod: "", fullBeneficiaryCount: null, fractionalBeneficiaryCount: null, totalBeneficiaryCount: null },
+    periods: [],
     psrMetrics: { totalMedicareDays: null, totalClaims: null, totalUnduplicatedCensus: null, snVisitUnits: null, grossReimbursement: null, sequestration: null, netReimbursement: null, reimbursementPeriod: "" },
     qualityMetrics: { cahpsOverallScore: null, cahpsNationalAvg: null, pepperOutlierFlags: null, qapiProjectCount: null, surveyDeficiencyCount: null, surveyConditionLevel: false, openDeficiencies: null },
     criticalFindings: [], _parseWarning: true, ...overrides,
@@ -207,13 +208,15 @@ async function saveReportCards({ supabase, clinicId, merged, sourceDocId = null 
     });
   }
 
-  // ── PS&R (extracted values only) ──
+  // ── PS&R — the selected period AND every period read off the report, so the
+  //    dashboard can re-validate and re-select deterministically on every load.
   const psr = merged.psrMetrics || {};
-  const psrHasData = Object.values(psr).some((v) => v != null && v !== "");
+  const psrPeriods = Array.isArray(merged.periods) ? merged.periods : [];
+  const psrHasData = Object.values(psr).some((v) => v != null && v !== "") || psrPeriods.length > 0;
   if (psrHasData) {
     await upsertReportCard({
       supabase, clinicId, reportType: "psr", reportDate, reportPeriodLabel: periodLabel, sourceDocId,
-      analysis: { psrMetrics: psr },
+      analysis: { psrMetrics: psr, psrPeriods },
     });
   }
 
@@ -534,7 +537,9 @@ async function callClaudeDocs(system, textContent, imageBlocks = [], maxTokens =
 const SYSTEM_PROMPT_1 = `You are a data extraction engine for Connect Shield, a Medicare hospice compliance platform. Your ONLY job is to read values off the reports you are given and return them verbatim. You must NOT calculate anything, NOT compute ratios or percentages, and NOT assign any score. If a value is not printed on the report, return null. Never estimate, never infer, never fill a gap.
 
 PS&R REPORT 810 LAYOUT
-The report has up to FOUR period columns side by side, labelled "SERVICES FOR PERIOD MM/DD/YY - MM/DD/YY". Later columns are often all zeros. Use the MOST RECENT period that contains non-zero data, and report that period label exactly as printed in psrMetrics.reimbursementPeriod. Take every psrMetrics value from that SAME column. Never mix columns and never add columns together.
+The report prints up to FOUR period columns side by side, each labelled "SERVICES FOR PERIOD MM/DD/YY - MM/DD/YY". Providers have different fiscal year ends, so these periods vary between agencies.
+
+Return ONE entry in the periods array for EVERY period column printed on the report, including columns that are entirely zeros. Do NOT choose between them and do NOT merge them. Selecting the right period is handled downstream. Within each entry, every value must come from that ONE column. Never mix columns and never add columns together.
 
 STATISTIC SECTION rows: MEDICARE DAYS, CLAIMS, TOTAL UNDUPLICATED CENSUS COUNT.
 
@@ -544,14 +549,14 @@ CHARGE SECTION column mapping. This is critical and easy to get wrong. Each peri
 - Revenue code 0250 (PHARMACY) reports in "UNITS".
 - Revenue code 0651 (HOSPICE/RTN HOME/DAYS) reports in "UNDUP DAYS".
 
-REIMBURSEMENT SECTION rows: GROSS REIMBURSEMENT, SEQUESTRATION, NET REIMBURSEMENT. Report the dollar figures exactly as printed, as plain numbers with no currency symbols or commas.
+REIMBURSEMENT SECTION rows: GROSS REIMBURSEMENT, SEQUESTRATION, NET REIMBURSEMENT. Report all three for each period, as plain numbers with no currency symbols or commas. These three are checked against each other downstream, so they must all come from the same column.
 
 BENEFICIARY COUNT REPORT (Streamlined Hospice Beneficiary Count Summary)
-The header states a "Beneficiary Identification Period: MM/DD/YY to MM/DD/YY". Report that exactly as printed in capData.capYearPeriod. The table lists one row per Cap Year with Full Beneficiary Count, Fractional Beneficiary Count and Total Beneficiary Count. Use the row whose Cap Year matches the end year of the Beneficiary Identification Period. Ignore rows that are all zeros.
+The header states a "Beneficiary Identification Period: MM/DD/YY to MM/DD/YY". Report that exactly as printed in capData.capYearPeriod. The table lists one row per Cap Year with Full Beneficiary Count, Fractional Beneficiary Count and Total Beneficiary Count. Use the row whose Cap Year matches the end year of the Beneficiary Identification Period, and report all three of its figures. Ignore rows that are entirely zeros.
 
 Return ONLY valid JSON starting with { and ending with }. No markdown, no commentary:
 
-{"agencyName":"provider name exactly as printed, or empty string","providerNumber":"the provider or CCN number as printed, or empty string","reportPeriod":"a short human-readable label for the period this analysis covers","reportPeriodEnd":"YYYY-MM-DD, the LAST day of that period, or empty string","reportsAnalyzed":["names of the report types you actually read"],"psrMetrics":{"totalMedicareDays":null,"totalClaims":null,"totalUnduplicatedCensus":null,"snVisitUnits":null,"grossReimbursement":null,"sequestration":null,"netReimbursement":null,"reimbursementPeriod":""},"capData":{"capYear":"","capYearPeriod":"","fullBeneficiaryCount":null,"fractionalBeneficiaryCount":null,"totalBeneficiaryCount":null},"qualityMetrics":{"cahpsOverallScore":null,"cahpsNationalAvg":null,"pepperOutlierFlags":null,"qapiProjectCount":null,"surveyDeficiencyCount":null,"surveyConditionLevel":false,"openDeficiencies":null}}
+{"agencyName":"provider name exactly as printed, or empty string","providerNumber":"the provider or CCN number as printed, or empty string","reportPeriod":"a short human-readable label covering what this upload contains","reportPeriodEnd":"YYYY-MM-DD, the LAST day covered, or empty string","reportsAnalyzed":["names of the report types you actually read"],"periods":[{"reimbursementPeriod":"MM/DD/YY - MM/DD/YY exactly as printed","totalMedicareDays":null,"totalClaims":null,"totalUnduplicatedCensus":null,"snVisitUnits":null,"grossReimbursement":null,"sequestration":null,"netReimbursement":null}],"capData":{"capYear":"","capYearPeriod":"","fullBeneficiaryCount":null,"fractionalBeneficiaryCount":null,"totalBeneficiaryCount":null},"qualityMetrics":{"cahpsOverallScore":null,"cahpsNationalAvg":null,"pepperOutlierFlags":null,"qapiProjectCount":null,"surveyDeficiencyCount":null,"surveyConditionLevel":false,"openDeficiencies":null}}
 
 Every numeric field must be a plain number or null. Never a string, never a formula, never a calculated result. Leave qualityMetrics fields null unless a CAHPS, PEPPER or survey document was actually included in this upload.`;
 
@@ -1219,6 +1224,13 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
       ...(d?.capData || {}),
       ...(cards.cap?.capData || {}),
     };
+    // When every PS&R period column is on file, hand them all to the engine and
+    // let CODE validate each and pick the most recent one that passes. Records
+    // saved before this existed fall back to the single stored period.
+    const periods = (Array.isArray(cards.psr?.psrPeriods) && cards.psr.psrPeriods.length)
+      ? cards.psr.psrPeriods
+      : (Array.isArray(d?.periods) && d.periods.length ? d.periods : null);
+    if (periods) raw.periods = periods;
     if (!raw.reimbursementPeriod) raw.reimbursementPeriod = cards.psr?._periodLabel || d?.reportPeriod || null;
     return computeCompliance({
       raw,
@@ -1291,6 +1303,39 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
           <AlertCircle size={15} color="#C98A1F" className="shrink-0 mt-0.5" />
           <div className="text-sm" style={{ color: "#7A5700" }}>
             <strong>Tip:</strong> Upload both PS&R Report 810 and the Beneficiary Count report together for the most complete analysis. Enter your CCN above for actual published SSVI scores.
+          </div>
+        </div>
+      )}
+
+      {/* Data quality — arithmetic that must hold on any correctly-read report.
+          A failure here means a figure was misread, so it is suppressed rather
+          than scored, and the clinic is told which one and why. */}
+      {compliance.validation?.issues?.length > 0 && (
+        <div className="rounded-2xl p-4" style={{ background: "#FFFFFF", border: `1px solid ${compliance.validation.ok ? "#F0C87A" : "#F3B8AC"}`, boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle size={15} color={compliance.validation.ok ? "#C98A1F" : "#D14343"} />
+            <span style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-base">
+              {compliance.validation.ok ? "Data quality notes" : "Report data could not be verified"}
+            </span>
+            {compliance.validation.suppress?.length > 0 && (
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "#FDECEA", color: "#D14343" }}>
+                {compliance.validation.suppress.length} signal{compliance.validation.suppress.length > 1 ? "s" : ""} withheld
+              </span>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            {compliance.validation.issues.map((iss, i) => (
+              <div key={i} className="flex items-start gap-2 text-sm">
+                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded shrink-0 mt-0.5"
+                  style={{ background: iss.severity === "error" ? "#FDECEA" : "#FEF3E2", color: iss.severity === "error" ? "#D14343" : "#C98A1F" }}>
+                  {iss.severity}
+                </span>
+                <span style={{ color: "#16202E" }}>{iss.message}</span>
+              </div>
+            ))}
+          </div>
+          <div className="text-xs mt-2.5" style={{ color: "#64708A" }}>
+            Re-upload the report to resolve. Figures that failed a check are excluded from the composite index rather than scored on unverified data.
           </div>
         </div>
       )}
@@ -1687,15 +1732,41 @@ function DocumentsHub({ clinicId, onAnalysisData }) {
           const combined = Object.entries(summaries).map(([t, txt]) => `\n\n====== ${t.toUpperCase()} REPORT ======\n${txt}`).join("\n").substring(0, 9000);
           const header = `REPORTS: ${reportsFound.join(", ")}\n\n`;
 
-          // Step 1 — extraction only. No arithmetic, no scores.
-          const part1 = await callClaudeWithRetry(SYSTEM_PROMPT_1, header + combined, 3000, 3);
+          // Step 1 — extraction only. Every period column, no arithmetic, no scores.
+          const part1 = await callClaudeWithRetry(SYSTEM_PROMPT_1, header + combined, 3500, 3);
           const merged = { ...part1, reportsAnalyzed: reportsFound.map(getReportTypeLabel) };
+          if (!Array.isArray(merged.periods)) merged.periods = [];
 
-          // Step 2 — compute every derived figure in code, then hand the RESULT
-          // to the model so findings can only cite numbers that were calculated.
+          // Step 2 — CODE validates every period and selects one. Each period is
+          // checked against arithmetic that must hold on any correct read (gross
+          // minus sequestration equals net, days at least equal census, and so
+          // on), so a misread column is rejected here rather than scored.
+          let calc = null;
           try {
-            const calc = computeCompliance({ raw: { ...(merged.psrMetrics || {}), ...(merged.capData || {}) } });
-            const factSheet = `EXTRACTED AND CALCULATED FIGURES:\n${JSON.stringify({ metrics: calc.metrics, compositeIndex: calc.composite.score, coverage: calc.composite.coverage }, null, 1)}`;
+            calc = computeCompliance({
+              raw: { periods: merged.periods, ...(merged.psrMetrics || {}), ...(merged.capData || {}) },
+            });
+            if (calc.periodSelection?.selected) {
+              merged.psrMetrics = { ...calc.periodSelection.selected };
+              console.log("[extract] period selected:", merged.psrMetrics.reimbursementPeriod,
+                `(${calc.periodSelection.considered} considered, ${calc.periodSelection.rejected.length} rejected)`);
+            }
+            (calc.periodSelection?.rejected || []).forEach((r) =>
+              console.warn("[extract] period rejected:", r.period?.reimbursementPeriod, r.issues.map((i) => i.message).join(" | ")));
+            if (calc.validation?.issues?.length) {
+              console.warn("[extract] validation issues:", calc.validation.issues.map((i) => `${i.severity}: ${i.message}`).join(" | "));
+            }
+          } catch (e) {
+            console.error("[documents] validation failed", e);
+          }
+
+          // Step 3 — findings are written against the CALCULATED figures, so they
+          // can only cite numbers that passed validation.
+          try {
+            const facts = calc
+              ? { metrics: calc.metrics, compositeIndex: calc.composite.score, coverage: calc.composite.coverage, dataQuality: calc.validation }
+              : { note: "figures could not be calculated" };
+            const factSheet = `EXTRACTED AND CALCULATED FIGURES:\n${JSON.stringify(facts, null, 1)}`;
             const part2 = await callClaudeWithRetry(SYSTEM_PROMPT_2, factSheet, 1500, 2);
             merged.criticalFindings = Array.isArray(part2.criticalFindings) ? part2.criticalFindings : [];
           } catch (e) {
