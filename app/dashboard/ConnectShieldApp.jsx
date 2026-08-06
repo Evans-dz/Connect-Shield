@@ -961,7 +961,11 @@ function ComplianceCardsRow({ cards = {}, loading = false, metrics = {} }) {
           </div>
           {(metrics.reimbursementPeriod || metrics.capYearPeriod) && (
             <div className="text-[11px] font-mono rounded-lg px-3 py-2" style={{ background: "#F5F6F8", color: "#64708A" }}>
-              Basis: reimbursement covers {metrics.reimbursementPeriod || "—"}; cap year covers {metrics.capYearPeriod || "—"}.
+              Basis: {metrics.reimbursementPeriod && metrics.capYearPeriod
+                ? `reimbursement covers ${metrics.reimbursementPeriod}; cap year covers ${metrics.capYearPeriod}.`
+                : metrics.reimbursementPeriod
+                  ? `reimbursement covers ${metrics.reimbursementPeriod}. Cap year not captured.`
+                  : `cap year covers ${metrics.capYearPeriod}. Reimbursement period not captured.`}
             </div>
           )}
         </div>
@@ -1455,7 +1459,11 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
           </div>
           {(metrics.reimbursementPeriod || metrics.capYearPeriod) && (
             <div className="mt-3 text-[11px] font-mono rounded-lg px-3 py-2" style={{ background: "#F5F6F8", color: "#64708A" }}>
-              Basis: reimbursement covers {metrics.reimbursementPeriod || "—"}; cap year covers {metrics.capYearPeriod || "—"}.
+              Basis: {metrics.reimbursementPeriod && metrics.capYearPeriod
+                ? `reimbursement covers ${metrics.reimbursementPeriod}; cap year covers ${metrics.capYearPeriod}.`
+                : metrics.reimbursementPeriod
+                  ? `reimbursement covers ${metrics.reimbursementPeriod}. Cap year not captured — re-upload the Beneficiary Count report.`
+                  : `cap year covers ${metrics.capYearPeriod}. Reimbursement period not captured — re-upload the PS&R 810.`}
             </div>
           )}
           {metrics.capExposure > 0 && (
