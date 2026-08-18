@@ -31,7 +31,6 @@ const TIERS = [
   {
     name: "Single Agency",
     for: "One hospice, one CCN",
-    price: "$400",
     highlight: false,
     scale: [
       "1 CCN",
@@ -43,7 +42,6 @@ const TIERS = [
   {
     name: "Multi-Agency",
     for: "Owners & groups with several CCNs",
-    price: "$900",
     highlight: true,
     scale: [
       "Up to 5 CCNs in one portal",
@@ -56,7 +54,6 @@ const TIERS = [
   {
     name: "Enterprise",
     for: "Networks, MSOs & consultants",
-    price: "$1,800",
     highlight: false,
     scale: [
       "Unlimited CCNs",
@@ -194,11 +191,7 @@ export default function Pricing() {
                 )}
                 <h3 className="font-display text-2xl text-ink">{t.name}</h3>
                 <p className="text-sm text-slate mt-1">{t.for}</p>
-                <div className="mt-5 flex items-baseline gap-1.5">
-                  <span className="font-display text-ink" style={{ fontSize: "2.6rem", lineHeight: 1 }}>{t.price}</span>
-                  <span className="text-sm font-mono" style={{ color: "#64708A" }}>/mo</span>
-                </div>
-                <div className="my-6" style={{ borderTop: "1px solid #EEF0F4" }} />
+                <div className="mt-6 mb-6" style={{ borderTop: "1px solid #EEF0F4" }} />
                 <div className="text-[11px] font-mono uppercase tracking-wide mb-3" style={{ color: "#8992A3" }}>
                   Complete platform, plus
                 </div>
@@ -222,7 +215,7 @@ export default function Pricing() {
         </div>
 
         <p className="text-center text-[12px] font-mono mt-8" style={{ color: "#8992A3" }}>
-          12-month commitment · billed monthly · Secure, encrypted per-clinic portal
+          Pricing shared on your demo call · 12-month commitment · billed monthly · Secure, encrypted per-clinic portal
         </p>
       </section>
 

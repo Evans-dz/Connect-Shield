@@ -58,8 +58,22 @@ export default function Footer() {
         </div>
 
         <div className="mt-12 pt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-3" style={{ borderTop: "1px solid #243354" }}>
-          <div className="text-[12px] font-mono" style={{ color: "#5A6B8C" }}>
-            © {new Date().getFullYear()} {SITE.name} · {SITE.domain}
+          <div className="text-[12px] font-mono flex flex-col gap-1.5" style={{ color: "#5A6B8C" }}>
+            <span>
+              © {new Date().getFullYear()} {SITE.name} · {SITE.domain}
+            </span>
+            <span>
+              Made &amp; designed by{" "}
+              <a
+                href={SITE.credit.href}
+                target="_blank"
+                rel="noreferrer"
+                className="transition-colors hover:text-white"
+                style={{ color: "#B8863F", borderBottom: "1px solid rgba(184,134,63,0.35)", paddingBottom: "1px" }}
+              >
+                {SITE.credit.label}
+              </a>
+            </span>
           </div>
           <div className="text-[12px] font-mono max-w-xl" style={{ color: "#5A6B8C" }}>
             SSVI figures reproduced from the CMS FY2027 Hospice Wage Index proposed rule (CMS-1851-P), which is not finalized. Connect Shield is not affiliated with CMS and does not determine fraud, waste, or abuse.
