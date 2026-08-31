@@ -43,6 +43,7 @@ export default function RootLayout({ children }) {
     name: SITE.name,
     url: SITE.url,
     description: SITE.description,
+    logo: `${SITE.url}/connect-shield-mark.png`,
     sameAs: [],
   };
   return (

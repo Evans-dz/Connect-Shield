@@ -12,7 +12,7 @@ export const revalidate = 86400
 
 export const metadata = {
   title:
-    'Hospice SSVI Scores by State — Analysis of All 6,643 Medicare-Certified Agencies | Connect Shield',
+    'Hospice SSVI Scores by State — Analysis of All 6,643 Medicare-Certified Agencies',
   description:
     'The CMS Service and Spending Variation Index is mostly a spending index. An analysis of FY2025 SSVI scores for every Medicare-certified hospice in the United States, ranked by state.',
   alternates: { canonical: `${SITE.url}/hospice/ssvi-by-state` },
@@ -27,6 +27,7 @@ export const metadata = {
 
 const MIN_FOR_RANKING = 20
 const PUBLISHED = '2026-07-30'
+const MODIFIED = '2026-08-31'
 
 async function fetchAll() {
   const rows = []
@@ -98,8 +99,58 @@ function CompositionCard({ title, note, items, half }) {
   )
 }
 
+const DATASET_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'Dataset',
+  name: 'CMS Hospice Service and Spending Variation Index (SSVI) — FY2025 Scores',
+  description:
+    'FY2025 Service and Spending Variation Index scores (0–16) for approximately 6,643 Medicare-certified hospices, built from nine claims-based measures: a 0–8 non-hospice spending score and eight utilization measures worth one point each. Published by CMS with the FY2027 hospice final rule (CMS-1851-F).',
+  url: `${SITE.url}/hospice/ssvi-by-state`,
+  creator: {
+    '@type': 'GovernmentOrganization',
+    name: 'Centers for Medicare & Medicaid Services',
+    url: 'https://www.cms.gov',
+  },
+  publisher: { '@type': 'Organization', name: SITE.name, url: SITE.url },
+  citation:
+    'CMS FY2027 Hospice Wage Index and Payment Rate Update Final Rule (CMS-1851-F), SSVI data file, July 30, 2026',
+  temporalCoverage: '2024-10-01/2025-09-30',
+  spatialCoverage: 'United States',
+  variableMeasured: 'Service and Spending Variation Index (0–16)',
+  isAccessibleForFree: true,
+  size: 'approximately 6,643 records',
+}
+
 export default async function Page() {
   const rows = await fetchAll()
+
+  // Every stat below assumes at least one scored agency. If the query comes back
+  // empty (Supabase unreachable, table not seeded), say so instead of crashing.
+  if (!rows.length) {
+    return (
+      <div className="bg-slate-50">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(DATASET_LD) }}
+        />
+        <article className="mx-auto max-w-4xl px-5 py-16 sm:px-6 sm:py-24">
+          <nav className="mb-8 text-sm text-slate-500">
+            <Link href="/hospice" className="hover:text-slate-900">
+              Hospice SSVI Scores
+            </Link>
+            <span className="mx-2 text-slate-300">/</span>
+            <span className="text-slate-700">By state</span>
+          </nav>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+            The hospice SSVI is mostly a spending index
+          </h1>
+          <p className="mt-5 text-lg leading-relaxed text-slate-700">
+            This analysis is temporarily unavailable. Please check back shortly.
+          </p>
+        </article>
+      </div>
+    )
+  }
 
   const nationalAvg = mean(rows.map((r) => r.fy2025_total_ssvi))
   const nationalSpend = mean(rows.map((r) => r.fy2025_spending_score))
@@ -186,17 +237,22 @@ export default async function Page() {
     description:
       'An analysis of FY2025 CMS Service and Spending Variation Index scores for all Medicare-certified hospices in the United States.',
     datePublished: PUBLISHED,
-    dateModified: PUBLISHED,
+    dateModified: MODIFIED,
     author: { '@type': 'Organization', name: SITE.name, url: SITE.url },
     publisher: { '@type': 'Organization', name: SITE.name, url: SITE.url },
     mainEntityOfPage: `${SITE.url}/hospice/ssvi-by-state`,
   }
+
 
   return (
     <div className="bg-slate-50">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(DATASET_LD) }}
       />
 
       <article className="mx-auto max-w-4xl px-5 py-10 sm:px-6 sm:py-16">
@@ -554,8 +610,8 @@ export default async function Page() {
           </h2>
           <p className="mt-3 leading-relaxed text-slate-700">
             The Service and Spending Variation Index is a 0&ndash;16 score CMS
-            introduced in the FY2027 hospice wage index proposed rule
-            (CMS-1851-P). It combines a 0&ndash;8 non-hospice spending score,
+            finalized in the FY2027 hospice wage index final rule
+            (CMS-1851-F), effective October 1, 2026. It combines a 0&ndash;8 non-hospice spending score,
             based on Medicare spending outside the hospice benefit for an
             agency&apos;s enrolled beneficiaries, with a 0&ndash;8 utilization
             score built from eight claims-based measures: live discharge rate,
@@ -572,15 +628,15 @@ export default async function Page() {
           </p>
           <p className="mt-4 text-sm leading-relaxed text-slate-500">
             Analysis by Connect Shield using the CMS SSVI data file published
-            with CMS-1851-P. State figures are unweighted means across agencies
+            with CMS-1851-F. State figures are unweighted means across agencies
             with a FY2025 score; {rows.length.toLocaleString()} agencies had one,
             and agencies without a score are excluded throughout. Composition
             rankings include only states with at least {MIN_FOR_RANKING} scored
             agencies. Year-over-year comparisons use the{' '}
             {withBoth.length.toLocaleString()} agencies with both a FY2024 and
-            FY2025 score. The FY2027 rule was proposed, not final, at the time of
-            publication; figures reflect the SSVI data file as released with the
-            proposed rule. Connect Shield is not affiliated with CMS.
+            FY2025 score. CMS finalized the SSVI in the FY2027 hospice final
+            rule on July 30, 2026; figures reflect the SSVI data file as
+            published with that rule. Connect Shield is not affiliated with CMS.
           </p>
         </section>
 

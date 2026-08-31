@@ -5,6 +5,9 @@ import CCNTeaser from "@/components/CCNTeaser";
 import { SITE, STATS, COMPETITORS, FAQ } from "@/lib/site";
 import { SOLUTIONS } from "@/lib/solutions";
 
+// Justin's testimonial — flip to true once he approves the exact wording below.
+const SHOW_TESTIMONIAL = false;
+
 const PLATFORM = [
   { icon: Search, title: "Published SSVI lookup", body: "Your exact CMS score for all 6,643 scored hospices, with every one of the nine metrics broken down." },
   { icon: Activity, title: "PS&R risk drivers", body: "Upload Report 810 and get RN intensity, length of stay, and reimbursement calculated in seconds." },
@@ -50,8 +53,11 @@ export default function Home() {
                   Look up my SSVI score
                 </a>
               </div>
-              <div className="flex items-center gap-2 mt-6 text-[12px] font-mono animate-fade-up" style={{ color: "#7C8AA8", animationDelay: "240ms" }}>
-                <ShieldCheck size={14} color="#B8863F" /> Encrypted · Per-clinic isolated access · Built on public CMS data
+              <div className="mt-6 text-[12px] font-mono animate-fade-up" style={{ color: "#E8CFA0", animationDelay: "210ms" }}>
+                SSVI finalized July 30, 2026 · Effective October 1, 2026 — one month out
+              </div>
+              <div className="flex items-center gap-2 mt-3 text-[12px] font-mono animate-fade-up" style={{ color: "#7C8AA8", animationDelay: "240ms" }}>
+                <ShieldCheck size={14} color="#B8863F" /> Zero PHI stored · Encrypted · Built with a working hospice administrator
               </div>
             </div>
 
@@ -127,6 +133,28 @@ export default function Home() {
         </Reveal>
       </section>
 
+      {/* ── TESTIMONIAL ───────────────────────────────────── */}
+      {/* DRAFT — Justin has agreed to a named testimonial; wording NOT yet approved.
+          Hidden until he signs off: flip SHOW_TESTIMONIAL to true and redeploy. */}
+      {SHOW_TESTIMONIAL && (
+      <section className="max-w-content mx-auto px-5 md:px-8 pb-4">
+        <Reveal>
+          <div className="hero-navy rounded-3xl px-8 md:px-14 py-12 md:py-14 text-center relative overflow-hidden">
+            <div className="index-field absolute inset-0" aria-hidden="true" />
+            <div className="relative max-w-3xl mx-auto">
+              <div className="eyebrow justify-center" style={{ color: "#E8CFA0" }}>From the pilot</div>
+              <blockquote className="font-display text-white mt-5" style={{ fontSize: "clamp(1.4rem, 2.8vw, 2rem)", lineHeight: 1.3 }}>
+                &ldquo;It caught errors in our numbers nobody would have found by hand. And it ended the report digging — one dashboard instead of five PDFs.&rdquo;
+              </blockquote>
+              <div className="mt-6 text-[13px] font-mono" style={{ color: "#E8CFA0" }}>
+                Justin — Administrator, EM Hospice · pilot partner since 2026
+              </div>
+            </div>
+          </div>
+        </Reveal>
+      </section>
+      )}
+
       {/* ── MISSION ───────────────────────────────────────── */}
       <section style={{ background: "#F7F0E1" }}>
         <div className="max-w-content mx-auto px-5 md:px-8 py-20 md:py-28 text-center">
@@ -199,7 +227,7 @@ export default function Home() {
             {[
               { icon: ShieldCheck, h: "Secure by design", p: "Connect Shield works from CMS agency-level data and the reports you upload — never patient names or diagnoses. Your data is encrypted in transit and at rest." },
               { icon: Lock, h: "Secure per-clinic access", p: "Each hospice gets its own portal with hashed credentials, encrypted sessions, and multi-factor authentication support." },
-              { icon: Check, h: "Sourced straight from CMS", p: "SSVI figures come directly from the CMS-1851-P file. Every measure we show reconciles to your published score." },
+              { icon: Check, h: "Sourced straight from CMS", p: "SSVI figures come directly from the published CMS SSVI file. Every measure we show reconciles to your published score." },
             ].map((c, i) => {
               const Icon = c.icon;
               return (

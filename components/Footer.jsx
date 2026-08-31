@@ -16,7 +16,7 @@ export default function Footer() {
               <span className="font-display text-lg text-white">{SITE.name}</span>
             </div>
             <p className="text-sm mt-4 max-w-xs" style={{ color: "#93A0B8" }}>
-              Confidence starts with visibility. Built for hospice leadership on public CMS data — HIPAA-compliant and encrypted throughout.
+              Confidence starts with visibility. Built on your published CMS data — zero PHI stored, encrypted throughout.
             </p>
           </div>
 
@@ -57,7 +57,21 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 pt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-3" style={{ borderTop: "1px solid #243354" }}>
+        {/* Legal & trust row */}
+        <div className="mt-12 pt-6 flex flex-wrap items-center gap-x-6 gap-y-2" style={{ borderTop: "1px solid #243354" }}>
+          {[
+            { label: "Security", href: "/security" },
+            { label: "Privacy", href: "/privacy" },
+            { label: "Terms", href: "/terms" },
+            { label: "Contact", href: "/contact" },
+          ].map((l) => (
+            <Link key={l.href} href={l.href} className="text-[12px] font-mono hover:text-white transition-colors" style={{ color: "#93A0B8" }}>
+              {l.label}
+            </Link>
+          ))}
+        </div>
+
+        <div className="mt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
           <div className="text-[12px] font-mono flex flex-col gap-1.5" style={{ color: "#5A6B8C" }}>
             <span>
               © {new Date().getFullYear()} {SITE.name} · {SITE.domain}
@@ -76,7 +90,7 @@ export default function Footer() {
             </span>
           </div>
           <div className="text-[12px] font-mono max-w-xl" style={{ color: "#5A6B8C" }}>
-            SSVI figures reproduced from the CMS FY2027 Hospice Wage Index proposed rule (CMS-1851-P), which is not finalized. Connect Shield is not affiliated with CMS and does not determine fraud, waste, or abuse.
+            SSVI figures reproduced from the CMS FY2027 hospice final rule (CMS-1851-F, effective October 1, 2026). Connect Shield is not affiliated with CMS and does not determine fraud, waste, or abuse.
           </div>
         </div>
       </div>

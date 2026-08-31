@@ -12,7 +12,7 @@ export const metadata = {
 
 // The complete platform — included in EVERY plan.
 const TOOLKIT = [
-  "SSVI score + all 9 measures (FY2024 & FY2025, year-over-year)",
+  "SSVI score + all 9 measures (published FY2025, year-over-year trend)",
   "Medicare CAP exposure & clawback calculator",
   "PS&R Report 810 analysis — RN intensity, LOS, reimbursement",
   "PEPPER outlier analysis",

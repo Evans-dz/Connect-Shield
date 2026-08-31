@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 import { SITE } from '@/lib/site'
+import { stateName } from '@/lib/states'
 import SSVILookup from '@/components/SSVILookup'
 
 const db = createClient(
@@ -11,7 +12,7 @@ const db = createClient(
 export const revalidate = 86400
 
 export const metadata = {
-  title: 'Hospice SSVI Scores — Every Medicare-Certified Agency | Connect Shield',
+  title: 'Hospice SSVI Scores — Every Medicare-Certified Agency',
   description:
     'Look up the CMS Service and Spending Variation Index (SSVI) score for any Medicare-certified hospice. FY2025 and FY2024 scores for 6,643 agencies, free and no signup.',
   alternates: { canonical: `${SITE.url}/hospice` },
@@ -46,18 +47,44 @@ export default async function Page() {
       ).toFixed(1)
     : '—'
 
+  const datasetLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Dataset',
+    name: 'CMS Hospice Service and Spending Variation Index (SSVI) — FY2025 Scores',
+    description:
+      'FY2025 Service and Spending Variation Index scores (0–16) for approximately 6,643 Medicare-certified hospices, built from nine claims-based measures: a 0–8 non-hospice spending score and eight utilization measures worth one point each. Published by CMS with the FY2027 hospice final rule (CMS-1851-F).',
+    url: `${SITE.url}/hospice`,
+    creator: {
+      '@type': 'GovernmentOrganization',
+      name: 'Centers for Medicare & Medicaid Services',
+      url: 'https://www.cms.gov',
+    },
+    publisher: { '@type': 'Organization', name: SITE.name, url: SITE.url },
+    citation:
+      'CMS FY2027 Hospice Wage Index and Payment Rate Update Final Rule (CMS-1851-F), SSVI data file, July 30, 2026',
+    temporalCoverage: '2024-10-01/2025-09-30',
+    spatialCoverage: 'United States',
+    variableMeasured: 'Service and Spending Variation Index (0–16)',
+    isAccessibleForFree: true,
+    size: 'approximately 6,643 records',
+  }
+
   return (
     <div className="bg-slate-50">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(datasetLd) }}
+      />
       <div className="mx-auto max-w-4xl px-5 py-10 sm:px-6 sm:py-14">
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
           Hospice SSVI Scores
         </h1>
         <p className="mt-4 text-slate-700">
           The Service and Spending Variation Index is a 0&ndash;16 score CMS
-          introduced in the FY2027 hospice proposed rule. It combines a
-          0&ndash;8 non-hospice spending score with a 0&ndash;8 utilization
-          score built from eight claims-based measures. CMS calculated one for
-          every Medicare-certified hospice in the country.
+          finalized in the FY2027 hospice final rule. It combines a 0&ndash;8
+          non-hospice spending score with a 0&ndash;8 utilization score built
+          from eight claims-based measures. CMS calculated one for every
+          Medicare-certified hospice in the country.
         </p>
         <p className="mt-3 text-sm text-slate-500">
           {rows.length.toLocaleString()} agencies · national average FY2025 SSVI{' '}
@@ -87,7 +114,9 @@ export default async function Page() {
               href={`/hospice/state/${s.toLowerCase()}`}
               className="bg-white px-4 py-3 hover:bg-amber-50"
             >
-              <div className="text-sm font-semibold text-slate-900">{s}</div>
+              <div className="text-sm font-semibold text-slate-900">
+                {stateName(s) || s}
+              </div>
               <div className="mt-0.5 text-xs text-slate-500">
                 {byState[s].count.toLocaleString()}{' '}
                 {byState[s].count === 1 ? 'agency' : 'agencies'} · avg{' '}
@@ -100,8 +129,8 @@ export default async function Page() {
         <p className="mt-8 text-sm text-slate-500">
           The SSVI is not a quality rating and does not indicate wrongdoing. It
           measures divergence from peer norms and is one input CMS uses to focus
-          oversight. Source: CMS FY2027 Hospice Wage Index Proposed Rule
-          (CMS-1851-P), SSVI data file.
+          oversight. Source: CMS FY2027 Hospice Wage Index Final Rule
+          (CMS-1851-F), SSVI data file.
         </p>
       </div>
     </div>

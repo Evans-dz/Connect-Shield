@@ -1,0 +1,9 @@
+CMS Certification Number (CCN),Hospice Name,City/Town,State,Urban/Rural Indicator,Total SSVI Score,Non-Hospice Spending Score,Utilization Score,Non-Hospice Spending Per Day,Live Discharge Rate Flag,Length of Stay > 180 Days Flag,Nursing Facility Flag,No CHC or GIP Flag,Visits in Last Two Days Flag,Skilled Nursing Minutes Flag,Weekend Visits Flag,Return Within 7 Days Flag
+031562,AGAPE SOUTH,PHOENIX,AZ,Urban,9,5,4,"$41.20",Y,Y,N,Y,N,N,Y,N
+31563,"AMERICARE HOSPICE, AND PALLIATIVE CARE",MESA,AZ,Urban,4,3,1,"$12.05",0,0,0,1,0,0,0,0
+A91618,"OPTIMAL CARES ""HOSPICE""",HOUSTON,TX,Rural,12,7,5,"$63.90",Y,Y,Y,N,Y,N,N,Y
+141624,"ST CROIX HOSPICE
+LOMBARD",LOMBARD,IL,Urban,6,4,2,-,N,Y,N,N,N,Y,N,N
+,MISSING CCN HOSPICE,DENVER,CO,Urban,3,2,1,$9.00,N,N,N,Y,N,N,N,N
+461518,GRAND COUNTY HOSPICE,MOAB,UT,Rural,,,,,,,,,,,,
+031625,"MAGGIE'S HOSPICE, LLC",TUCSON,AZ,Urban,7,4,3,"$1,020.00",Y,N,Y,N,N,N,Y,N

@@ -6,7 +6,7 @@ import { SITE } from "@/lib/site";
 export const metadata = {
   title: "Book a Demo — Hospice Compliance Intelligence",
   description:
-    "Book a Connect Shield demo. We'll set up your secure portal, load your CCN, and walk your team through your SSVI score and full compliance picture. HIPAA-compliant.",
+    "Book a Connect Shield demo — we pull your CCN live on the call and walk your team through your SSVI score and full compliance picture. Zero PHI stored.",
   alternates: { canonical: `${SITE.url}/demo` },
 };
 
@@ -30,7 +30,7 @@ export default function Demo() {
                 See your whole compliance picture in 20 minutes.
               </h1>
               <p className="text-base md:text-lg mt-5 max-w-md animate-fade-up" style={{ color: "#AEBAD0", animationDelay: "80ms" }}>
-                Tell us your hospice and we'll set up your secure portal, load your CCN, and show you exactly what CMS sees — with a plan to improve it.
+                Book the demo — we pull your CCN live on the call and show you exactly what CMS sees. Pricing follows the demo.
               </p>
               <ul className="mt-7 space-y-3 animate-fade-up" style={{ animationDelay: "140ms" }}>
                 {POINTS.map((p) => (

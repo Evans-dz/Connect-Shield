@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/auth/client";
 import ReportDownloadModal from "@/components/ReportDownloadModal";
+import BenchmarkPanel from "@/components/BenchmarkPanel";
+import BenchmarkTrend from "@/components/BenchmarkTrend";
 import { computeCompliance } from "@/lib/compliance";
 const FONT_IMPORT = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
@@ -274,7 +276,29 @@ async function upsertReportCard({ supabase, clinicId, reportType, analysis, repo
     { onConflict: "clinic_id,report_type" }
   );
   if (error) console.error("[report-cards] upsert error", reportType, error);
-  else console.log("[report-cards] upserted card:", reportType, reportDate ? `(period end ${reportDate})` : "(no date)");
+  else {
+    console.log("[report-cards] upserted card:", reportType, reportDate ? `(period end ${reportDate})` : "(no date)");
+    // ── APPEND-ONLY HISTORY (additive) ──
+    // Every successful card save also appends a snapshot to
+    // clinic_report_card_history so the dashboard can trend the composite over
+    // time. The current view still reads clinic_report_cards exactly as before.
+    // The table only exists after the 0002 migration runs — a failure here is
+    // logged and NEVER blocks the save.
+    try {
+      const { error: histErr } = await supabase.from("clinic_report_card_history").insert({
+        clinic_id: clinicId,
+        report_type: reportType,
+        analysis,
+        report_date: reportDate,
+        report_period_label: reportPeriodLabel,
+        source_doc_id: sourceDocId,
+      });
+      if (histErr) console.warn("[report-cards] history append skipped:", histErr.message);
+      else console.log("[report-cards] history row appended:", reportType);
+    } catch (e) {
+      console.warn("[report-cards] history append skipped:", e?.message || e);
+    }
+  }
   return { error };
 }
 
@@ -693,7 +717,7 @@ function CCNLookup({ onSSVIData, compact = false }) {
           </button>
         </div>
         <div className="text-xs font-mono mt-1.5" style={{ color: "#8992A3" }}>
-          Your CCN is on your PS&R report next to your provider name · All 7,059 US hospices in our database · Zero PHI
+          Your CCN is on your PS&R report next to your provider name · Every scored US hospice in our database · Zero PHI
         </div>
       </div>
 
@@ -1418,9 +1442,16 @@ function Dashboard({ analysisData, ssviData, hideLookup, clinicId, clinicName })
         ssviMeasures={SSVI_MEASURES}
       />
 
+      {/* Score history — trend of the composite as reports were saved. Hidden
+          until clinic_report_card_history holds 2+ scoreable snapshots. */}
+      <BenchmarkTrend clinicId={clinicId} resolvedSsvi={resolvedSsvi} />
+
       <ComplianceCardsRow cards={cards} loading={cardsLoading} metrics={metrics} />
 
       <SSVIBreakdownPanel ssviData={isRealSsvi ? ccnResult : null} />
+
+      {/* Benchmarking — state / national comparison + shareable snapshot link. */}
+      <BenchmarkPanel ccn={ccnResult?.ccn || null} />
 
       {/* CAP */}
       {(metrics.capLimit != null || metrics.netReimbursement != null) && (

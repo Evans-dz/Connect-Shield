@@ -2,6 +2,9 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 import { SITE } from '@/lib/site'
+import { stateName } from '@/lib/states'
+import NearbyHospices from '@/components/hospice/NearbyHospices'
+import AgencyFAQ from '@/components/hospice/AgencyFAQ'
 
 const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -34,24 +37,68 @@ export async function generateStaticParams() {
   return (data || []).map((r) => ({ slug: r.slug }))
 }
 
+// Returns { a, failed }. `failed` means the database was unreachable, which
+// is different from a slug that genuinely does not exist.
 async function getAgency(slug) {
-  const { data } = await db
+  const { data, error } = await db
     .from('ssvi_public')
     .select('*')
     .eq('slug', slug)
     .maybeSingle()
-  if (!data || data.fy2025_total_ssvi === null) return null
-  return data
+  if (error) return { a: null, failed: true }
+  if (!data || data.fy2025_total_ssvi === null) return { a: null, failed: false }
+  return { a: data, failed: false }
+}
+
+async function fetchStateRows(state) {
+  if (!state) return []
+  const rows = []
+  const PAGE = 1000
+  for (let i = 0; i < 12; i++) {
+    const { data, error } = await db
+      .from('ssvi_public')
+      .select('slug, hospice_name, city, fy2025_total_ssvi')
+      .eq('state', state)
+      .not('fy2025_total_ssvi', 'is', null)
+      .order('fy2025_total_ssvi', { ascending: false })
+      .range(i * PAGE, i * PAGE + PAGE - 1)
+    if (error || !data || data.length === 0) break
+    rows.push(...data)
+    if (data.length < PAGE) break
+  }
+  return rows
+}
+
+async function fetchNationalScores() {
+  const rows = []
+  const PAGE = 1000
+  for (let i = 0; i < 12; i++) {
+    const { data, error } = await db
+      .from('ssvi_public')
+      .select('fy2025_total_ssvi')
+      .not('fy2025_total_ssvi', 'is', null)
+      .range(i * PAGE, i * PAGE + PAGE - 1)
+    if (error || !data || data.length === 0) break
+    rows.push(...data)
+    if (data.length < PAGE) break
+  }
+  return rows
 }
 
 export async function generateMetadata({ params }) {
-  const a = await getAgency(params.slug)
-  if (!a) return { title: 'Hospice not found | Connect Shield' }
+  const { a, failed } = await getAgency(params.slug)
+  if (failed)
+    return { title: 'Hospice SSVI Score Lookup', robots: { index: false } }
+  if (!a) return { title: 'Hospice not found' }
   const where = [a.city, a.state].filter(Boolean).join(', ')
+  const title = `${a.hospice_name}${where ? ` (${where})` : ''} — SSVI ${a.fy2025_total_ssvi} of 16`
+  const description = `FY2025 CMS Service and Spending Variation Index for ${a.hospice_name}, CCN ${a.ccn}. Score ${a.fy2025_total_ssvi} of 16, ranked ${a.rank_national} of ${a.n_national} hospices nationally.`
+  const url = `${SITE.url}/hospice/${a.slug}`
   return {
-    title: `${a.hospice_name}${where ? ` (${where})` : ''} — SSVI ${a.fy2025_total_ssvi} of 16 | Connect Shield`,
-    description: `FY2025 CMS Service and Spending Variation Index for ${a.hospice_name}, CCN ${a.ccn}. Score ${a.fy2025_total_ssvi} of 16, ranked ${a.rank_national} of ${a.n_national} hospices nationally.`,
-    alternates: { canonical: `${SITE.url}/hospice/${a.slug}` },
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: { title, description, url },
   }
 }
 
@@ -69,19 +116,119 @@ function Stat({ label, value, sub }) {
   )
 }
 
+function avgOf(rows) {
+  if (!rows || !rows.length) return null
+  return (
+    rows.reduce((s, r) => s + Number(r.fy2025_total_ssvi), 0) / rows.length
+  )
+}
+
 export default async function Page({ params }) {
-  const a = await getAgency(params.slug)
+  const { a, failed } = await getAgency(params.slug)
+
+  if (failed) {
+    return (
+      <div className="bg-slate-50">
+        <div className="mx-auto max-w-4xl px-5 py-16 sm:px-6 sm:py-24">
+          <nav className="mb-8 text-sm text-slate-500">
+            <Link href="/hospice" className="hover:text-slate-900">
+              Hospice SSVI Scores
+            </Link>
+          </nav>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+            Score lookup temporarily unavailable
+          </h1>
+          <p className="mt-4 text-slate-700">
+            We couldn&apos;t load this agency&apos;s FY2025 SSVI record right
+            now. Please try again shortly.
+          </p>
+          <p className="mt-6">
+            <Link
+              href="/hospice"
+              className="font-medium text-amber-700 hover:underline"
+            >
+              Search all hospices &rarr;
+            </Link>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   if (!a) notFound()
+
+  const stateFull = stateName(a.state)
+  const stateLabel = stateFull || a.state
+
+  // Peer context for the comparison block and nearby module. Both fetches
+  // fail soft — every dependent block below is guarded.
+  const stateRows = await fetchStateRows(a.state)
+  const national = await fetchNationalScores()
+
+  const stateAvg = avgOf(stateRows)
+  const nationalAvg = avgOf(national)
+  const score = Number(a.fy2025_total_ssvi)
+
+  // Nearby: same city first, then the rest of the state, excluding this agency.
+  const others = stateRows.filter((r) => r.slug && r.slug !== a.slug)
+  const cityLc = (a.city || '').toLowerCase()
+  const sameCity = cityLc
+    ? others.filter((r) => (r.city || '').toLowerCase() === cityLc)
+    : []
+  const rest = others.filter((r) => !sameCity.includes(r))
+  const nearby = [...sameCity, ...rest].slice(0, 5)
 
   const flagged = MEASURES.filter(([k]) => a[k] === true).length
   const change = a.ssvi_change
 
   const hasPct = a.pct_national !== null && a.pct_national !== undefined
-  const barPct = hasPct
-    ? Number(a.pct_national)
-    : (Number(a.fy2025_total_ssvi) / 16) * 100
+  const barPct = hasPct ? Number(a.pct_national) : (score / 16) * 100
 
-  const jsonLd = {
+  const hasPrior =
+    a.fy2024_total_ssvi !== null && a.fy2024_total_ssvi !== undefined
+  const yoy = hasPrior
+    ? score > Number(a.fy2024_total_ssvi)
+      ? 'rose'
+      : score < Number(a.fy2024_total_ssvi)
+      ? 'fell'
+      : 'held steady'
+    : null
+
+  // FAQ — answers are plain strings so the FAQPage JSON-LD matches exactly.
+  const faqItems = [
+    {
+      q: `What is ${a.hospice_name}'s SSVI score?`,
+      a:
+        `${a.hospice_name} (CCN ${a.ccn}) has a published FY2025 SSVI score of ${score} of 16` +
+        (a.fy2025_spending_score !== null &&
+        a.fy2025_spending_score !== undefined &&
+        a.fy2025_utilization_score !== null &&
+        a.fy2025_utilization_score !== undefined
+          ? `: ${a.fy2025_spending_score} of 8 from non-hospice spending and ${a.fy2025_utilization_score} of 8 from the eight claims-based utilization measures.`
+          : ', published by CMS with the FY2027 hospice final rule.'),
+    },
+    stateLabel
+      ? {
+          q: `How does ${a.hospice_name} compare to other ${stateLabel} hospices?`,
+          a:
+            (a.rank_state && a.n_state
+              ? `It ranks ${a.rank_state} of ${a.n_state} scored hospices in ${stateLabel}. `
+              : '') +
+            (stateAvg !== null
+              ? `The average ${stateLabel} hospice scored ${stateAvg.toFixed(1)} on the FY2025 SSVI` +
+                (nationalAvg !== null
+                  ? `, against a national average of ${nationalAvg.toFixed(1)}.`
+                  : '.')
+              : '') || `CMS publishes an SSVI score for every Medicare-certified hospice, so any two ${stateLabel} agencies can be compared directly.`,
+        }
+      : null,
+    {
+      q: 'Is a high SSVI score a violation?',
+      a: 'No. CMS is explicit that the SSVI is not a determination of fraud, waste, or abuse. It measures how far an agency’s claims patterns diverge from peer norms, and it is one input CMS uses to decide where to focus oversight.',
+    },
+  ].filter(Boolean)
+
+  const orgLd = {
     '@context': 'https://schema.org',
     '@type': 'MedicalOrganization',
     name: a.hospice_name,
@@ -94,11 +241,43 @@ export default async function Page({ params }) {
     },
   }
 
+  const breadcrumbItems = [
+    {
+      '@type': 'ListItem',
+      position: 1,
+      name: 'Hospice SSVI Scores',
+      item: `${SITE.url}/hospice`,
+    },
+  ]
+  if (a.state) {
+    breadcrumbItems.push({
+      '@type': 'ListItem',
+      position: 2,
+      name: stateLabel,
+      item: `${SITE.url}/hospice/state/${a.state.toLowerCase()}`,
+    })
+  }
+  breadcrumbItems.push({
+    '@type': 'ListItem',
+    position: breadcrumbItems.length + 1,
+    name: a.hospice_name,
+    item: `${SITE.url}/hospice/${a.slug}`,
+  })
+  const breadcrumbLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: breadcrumbItems,
+  }
+
   return (
     <div className="bg-slate-50">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
 
       <div className="mx-auto max-w-4xl px-5 py-10 sm:px-6 sm:py-14">
@@ -113,7 +292,7 @@ export default async function Page({ params }) {
                 href={`/hospice/state/${a.state.toLowerCase()}`}
                 className="hover:text-slate-900"
               >
-                {a.state}
+                {stateLabel}
               </Link>
             </>
           )}
@@ -168,7 +347,7 @@ export default async function Page({ params }) {
                   <strong className="font-semibold text-slate-900">
                     {a.rank_state} of {a.n_state?.toLocaleString()}
                   </strong>{' '}
-                  in {a.state}
+                  in {stateLabel}
                 </>
               ) : null}
               {hasPct ? `. Higher than ${a.pct_national}% of hospices nationally.` : '.'}
@@ -207,13 +386,85 @@ export default async function Page({ params }) {
                   ? 'No change'
                   : change}
               </div>
-              {a.fy2024_total_ssvi !== null && (
+              {hasPrior && (
                 <div className="mt-1 text-sm text-slate-500">
                   was {a.fy2024_total_ssvi}
                 </div>
               )}
             </div>
           </div>
+        </section>
+
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold text-slate-900">
+            How {a.hospice_name} compares
+          </h2>
+          <div className="mt-3 space-y-3 text-slate-700">
+            <p>
+              {a.hospice_name} posted a FY2025{' '}
+              <Link
+                href="/ssvi"
+                className="font-medium text-amber-700 hover:underline"
+              >
+                SSVI
+              </Link>{' '}
+              of {score} of 16.
+              {stateAvg !== null && stateLabel ? (
+                <>
+                  {' '}
+                  The average {stateLabel} hospice scored {stateAvg.toFixed(1)}
+                  {nationalAvg !== null
+                    ? `; the national average is ${nationalAvg.toFixed(1)}`
+                    : ''}
+                  .
+                </>
+              ) : nationalAvg !== null ? (
+                <> The national average is {nationalAvg.toFixed(1)}.</>
+              ) : null}
+            </p>
+            {stateAvg !== null && stateLabel && (
+              <p>
+                That puts it{' '}
+                {Math.abs(score - stateAvg) < 0.05 ? (
+                  <>right at the {stateLabel} average</>
+                ) : (
+                  <>
+                    {Math.abs(score - stateAvg).toFixed(1)}{' '}
+                    {Math.abs(score - stateAvg).toFixed(1) === '1.0'
+                      ? 'point'
+                      : 'points'}{' '}
+                    {score > stateAvg ? 'above' : 'below'} its state peers
+                  </>
+                )}
+                {hasPrior && yoy ? (
+                  <>
+                    , and its score {yoy} year over year
+                    {yoy !== 'held steady'
+                      ? ` — from ${a.fy2024_total_ssvi} in FY2024 to ${score} in FY2025`
+                      : ` at ${score}`}
+                  </>
+                ) : null}
+                .
+              </p>
+            )}
+            {stateAvg === null && hasPrior && yoy && (
+              <p>
+                Its score {yoy} year over year
+                {yoy !== 'held steady'
+                  ? ` — from ${a.fy2024_total_ssvi} in FY2024 to ${score} in FY2025`
+                  : ` at ${score}`}
+                .
+              </p>
+            )}
+          </div>
+          <p className="mt-3">
+            <Link
+              href="/ssvi"
+              className="text-sm font-medium text-amber-700 hover:underline"
+            >
+              How is this score calculated? &rarr;
+            </Link>
+          </p>
         </section>
 
         <section className="mb-10">
@@ -267,6 +518,14 @@ export default async function Page({ params }) {
           </div>
         </section>
 
+        <NearbyHospices
+          items={nearby}
+          stateFullName={stateFull}
+          stateCode={a.state}
+        />
+
+        <AgencyFAQ items={faqItems} />
+
         <section className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8">
           <h2 className="text-lg font-semibold text-slate-900">
             What this means
@@ -278,9 +537,9 @@ export default async function Page({ params }) {
             oversight. A higher score means more divergence from peers.
           </p>
           <p className="mt-4 text-sm text-slate-500">
-            Source: CMS FY2027 Hospice Wage Index and Payment Rate Update
-            Proposed Rule (CMS-1851-P), SSVI data file. FY2025 and FY2024 scores
-            as published by CMS. Connect Shield is not affiliated with CMS.
+            Source: CMS FY2027 Hospice Wage Index and Payment Rate Update Final
+            Rule (CMS-1851-F), SSVI data file. FY2025 and FY2024 scores as
+            published by CMS. Connect Shield is not affiliated with CMS.
           </p>
         </section>
 
@@ -305,7 +564,7 @@ export default async function Page({ params }) {
               }
               className="rounded-lg border border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800"
             >
-              {a.state ? `See all ${a.state} hospices` : 'Browse all states'}
+              {stateLabel ? `See all ${stateLabel} hospices` : 'Browse all states'}
             </Link>
           </div>
         </section>

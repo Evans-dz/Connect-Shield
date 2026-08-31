@@ -1,9 +1,22 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/auth/server";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
 
 export async function POST(req) {
+  // Signed-in users only — this proxies our Anthropic key, and an open endpoint
+  // lets anyone on the internet burn credits (or worse, use it as a free API).
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "API key not configured" }, { status: 500 });
 
