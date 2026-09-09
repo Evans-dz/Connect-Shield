@@ -8,7 +8,7 @@ export const metadata = {
   alternates: { canonical: `${SITE.url}/terms` },
 };
 
-const EFFECTIVE = "August 31, 2026";
+const EFFECTIVE = "September 8, 2026";
 
 function Section({ n, title, children }) {
   return (
@@ -68,7 +68,7 @@ export default function Terms() {
 
           <Section n="01" title="The agreement">
             <p>
-              These terms are a contract between your organization and {SITE.name} ("we", "us") covering your use of the {SITE.name} platform and website. By creating an account or using the service, you accept them.
+              These terms are a contract between your organization and Connect Shield LLC, a Utah limited liability company ("Connect Shield", "we", "us"), covering your use of the {SITE.name} platform and website. By creating an account or using the service, you accept them.
             </p>
           </Section>
 

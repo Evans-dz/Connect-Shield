@@ -60,6 +60,8 @@ export default function Footer() {
         {/* Legal & trust row */}
         <div className="mt-12 pt-6 flex flex-wrap items-center gap-x-6 gap-y-2" style={{ borderTop: "1px solid #243354" }}>
           {[
+            { label: "About", href: "/about" },
+            { label: "FAQ", href: "/faq" },
             { label: "Security", href: "/security" },
             { label: "Privacy", href: "/privacy" },
             { label: "Terms", href: "/terms" },
@@ -74,7 +76,7 @@ export default function Footer() {
         <div className="mt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
           <div className="text-[12px] font-mono flex flex-col gap-1.5" style={{ color: "#5A6B8C" }}>
             <span>
-              © {new Date().getFullYear()} {SITE.name} · {SITE.domain}
+              © {new Date().getFullYear()} Connect Shield LLC · 923 S River Rd, St George, UT 84790 · (435) 224-6987
             </span>
             <span>
               Made &amp; designed by{" "}

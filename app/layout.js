@@ -41,9 +41,19 @@ export default function RootLayout({ children }) {
     "@context": "https://schema.org",
     "@type": "Organization",
     name: SITE.name,
+    legalName: "Connect Shield LLC",
     url: SITE.url,
     description: SITE.description,
     logo: `${SITE.url}/connect-shield-mark.png`,
+    telephone: "+14352246987",
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: "923 S River Rd",
+      addressLocality: "St George",
+      addressRegion: "UT",
+      postalCode: "84790",
+      addressCountry: "US",
+    },
     sameAs: [],
   };
   return (

@@ -8,7 +8,7 @@ export const metadata = {
   alternates: { canonical: `${SITE.url}/privacy` },
 };
 
-const EFFECTIVE = "August 31, 2026";
+const EFFECTIVE = "September 8, 2026";
 
 // Small helper for the repeated section shell — number, header, body.
 function Section({ n, title, children }) {
@@ -60,6 +60,7 @@ export default function Privacy() {
           <div className="rounded-2xl p-6 md:p-7 bg-white" style={{ border: "1px solid #E3E7ED" }}>
             <div className="eyebrow">The short version</div>
             <div className="mt-4 text-sm text-ink space-y-2">
+              <p>This is the privacy policy of Connect Shield LLC (&quot;Connect Shield&quot;).</p>
               <p>We collect the minimum needed to run your account: a name, a work email, your agency details, and anonymous usage analytics.</p>
               <p>We never collect PHI or patient data — the product is built so there is nowhere to put it.</p>
               <p>We never sell your data. Ever.</p>
@@ -123,13 +124,13 @@ export default function Privacy() {
             <p>
               Every marketing email we send identifies us, includes a working unsubscribe link, and honors opt-outs promptly.
             </p>
-            {/* CAN-SPAM contact block. NOTE: physical address is a PLACEHOLDER — replace
-                "[BUSINESS ADDRESS — PENDING]" with the registered business address before launch. */}
+            {/* CAN-SPAM contact block — registered business address. */}
             <div className="rounded-xl p-5 font-mono text-[13px]" style={{ background: "#EEF0F4", color: "#16202E" }}>
-              <div>{SITE.name}</div>
-              <div style={{ color: "#B8863F" }}>[BUSINESS ADDRESS — PENDING]</div>
-              <div>St. George, Utah</div>
+              <div>Connect Shield LLC</div>
+              <div>923 S River Rd</div>
+              <div>St George, UT 84790</div>
               <div>{SITE.email}</div>
+              <div>(435) 224-6987</div>
             </div>
           </Section>
 
