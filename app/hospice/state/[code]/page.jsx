@@ -46,9 +46,27 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }) {
   const name = stateName(params.code)
   if (!name) return { title: 'State not found' }
+  // Agency count enriches the description when the database is reachable;
+  // the metadata renders fine without it.
+  let count = null
+  try {
+    const { count: n, error } = await db
+      .from('ssvi_public')
+      .select('slug', { count: 'exact', head: true })
+      .eq('state', params.code.toUpperCase())
+      .not('fy2025_total_ssvi', 'is', null)
+    if (!error && n) count = n
+  } catch {
+    count = null
+  }
+  const description = count
+    ? `${count.toLocaleString()} Medicare-certified hospice ${
+        count === 1 ? 'agency' : 'agencies'
+      } in ${name}: FY2025 SSVI scores, spending and utilization measures, ranked. Free CMS data — no signup.`
+    : `Every Medicare-certified hospice agency in ${name}: FY2025 SSVI scores, spending and utilization measures, ranked. Free CMS data — no signup.`
   return {
-    title: `${name} Hospice SSVI Scores`,
-    description: `FY2025 CMS Service and Spending Variation Index scores for every Medicare-certified hospice in ${name}, ranked highest to lowest.`,
+    title: `${name} Hospice Agencies — SSVI Scores & CMS Data`,
+    description,
     alternates: {
       canonical: `${SITE.url}/hospice/state/${params.code.toLowerCase()}`,
     },

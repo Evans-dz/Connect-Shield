@@ -4,7 +4,7 @@ import { Link2, Loader2, Check, Copy, AlertCircle } from "lucide-react";
 
 // "Create share link" — POSTs to /api/share for the given CCN, then copies the
 // public snapshot URL to the clipboard. The link shows published CMS data only
-// (see /s/[token]) and expires after 30 days.
+// (see /s/[token]) and expires after 15 days.
 //
 // Degrades honestly: 401/500/network failures render a one-line error, never a
 // crash. Requires the share_links migration; until it runs, the server answers
@@ -89,7 +89,7 @@ export default function ShareLinkButton({ ccn }) {
       )}
 
       <div className="mt-2 text-[11px] font-mono" style={{ color: "#8992A3" }}>
-        Read-only snapshot of the published CMS score. No documents, no uploads. Expires in 30 days.
+        Read-only snapshot of the published CMS score. No documents, no uploads. Expires in 15 days.
       </div>
     </div>
   );

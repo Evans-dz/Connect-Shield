@@ -81,7 +81,7 @@ export default async function SnapshotPage({ params }) {
             </div>
             <h1 className="font-display text-white text-2xl md:text-3xl mt-5">This link is invalid or has expired</h1>
             <p className="text-sm mt-3" style={{ color: "#93A0B8" }}>
-              Score snapshot links expire after 30 days or can be revoked by whoever created them. Ask for a fresh link — or look up any hospice's published score yourself, free.
+              Score snapshot links expire after 15 days or can be revoked by whoever created them. Ask for a fresh link — or look up any hospice's published score yourself, free.
             </p>
             <div className="flex flex-wrap justify-center gap-3 mt-7">
               <Link href="/#lookup" className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-medium" style={{ background: "#B8863F", color: "#0E1830" }}>

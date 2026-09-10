@@ -91,8 +91,9 @@ export async function generateMetadata({ params }) {
     return { title: 'Hospice SSVI Score Lookup', robots: { index: false } }
   if (!a) return { title: 'Hospice not found' }
   const where = [a.city, a.state].filter(Boolean).join(', ')
-  const title = `${a.hospice_name}${where ? ` (${where})` : ''} — SSVI ${a.fy2025_total_ssvi} of 16`
-  const description = `FY2025 CMS Service and Spending Variation Index for ${a.hospice_name}, CCN ${a.ccn}. Score ${a.fy2025_total_ssvi} of 16, ranked ${a.rank_national} of ${a.n_national} hospices nationally.`
+  const stateFull = stateName(a.state)
+  const title = `${a.hospice_name}${where ? ` (${where})` : ''} — SSVI Score ${a.fy2025_total_ssvi}/16 & CMS Data`
+  const description = `Published CMS data for ${a.hospice_name}${where ? ` in ${where}` : ''}: FY2025 SSVI score ${a.fy2025_total_ssvi}/16, all nine measures${stateFull ? `, ${stateFull} rank` : ''}. Free — no signup.`
   const url = `${SITE.url}/hospice/${a.slug}`
   return {
     title,

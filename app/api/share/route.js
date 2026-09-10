@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 // Requires the 0001_share_links.sql migration to have been run.
 
 const CCN_RE = /^[A-Z0-9]{5,10}$/;
-const DEFAULT_EXPIRY_DAYS = 30;
+const DEFAULT_EXPIRY_DAYS = 15;
 
 export async function POST(req) {
   const supabase = await createClient();
