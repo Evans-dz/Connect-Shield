@@ -18,7 +18,7 @@ const DATA_UPDATED = new Date("2026-07-30");
 export default async function sitemap() {
   const now = new Date();
 
-  const core = ["", "/pricing", "/demo"].map((p) => ({
+  const core = ["", "/pricing", "/demo", "/regulatory-watch"].map((p) => ({
     url: `${SITE.url}${p}`,
     lastModified: now,
     changeFrequency: "weekly",

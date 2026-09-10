@@ -5,10 +5,21 @@ import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 const FIELD = "w-full rounded-xl px-4 py-3 text-sm focus:outline-none";
 const FIELD_STYLE = { background: "#FFFFFF", border: "1px solid #C7CDD8", color: "#16202E" };
 
-export default function DemoForm() {
-  const [form, setForm] = useState({ name: "", email: "", hospice: "", ccn: "", phone: "", message: "" });
+// Prefill props arrive from URL params — treat as display text only.
+const scrub = (v, max = 200) => (typeof v === "string" ? v.replace(/[<>]/g, "").trim().slice(0, max) : "");
+
+export default function DemoForm({ initialHospice = "", initialCcn = "", src = "" }) {
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    hospice: scrub(initialHospice, 120),
+    ccn: scrub(initialCcn, 20),
+    phone: "",
+    message: "",
+  });
   const [state, setState] = useState("idle"); // idle | sending | done | error
   const [err, setErr] = useState("");
+  const source = src === "claim" ? "claim" : "";
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -24,7 +35,7 @@ export default function DemoForm() {
       const res = await fetch("/api/demo-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(source ? { ...form, src: source } : form),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -86,6 +97,8 @@ export default function DemoForm() {
           <span className="text-sm" style={{ color: "#B23A2E" }}>{err}</span>
         </div>
       )}
+
+      {source ? <input type="hidden" name="src" value={source} readOnly /> : null}
 
       <button
         onClick={submit}

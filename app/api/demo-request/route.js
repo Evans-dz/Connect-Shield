@@ -18,6 +18,12 @@ export async function POST(req) {
   const phone = (body.phone || "").trim().slice(0, 40);
   const message = (body.message || "").trim().slice(0, 2000);
 
+  // Attribution: whitelist only. 'claim' (the agency-page claim band) maps to
+  // 'claim_page'; anything else — absent, junk, or unknown — stays the default.
+  const SRC_WHITELIST = { claim: "claim_page" };
+  const src = typeof body.src === "string" ? body.src.trim() : "";
+  const source = SRC_WHITELIST[src] || "marketing_site";
+
   if (!name || !hospice || !EMAIL_RE.test(email)) {
     return NextResponse.json({ error: "Name, hospice, and a valid email are required." }, { status: 400 });
   }
@@ -25,13 +31,13 @@ export async function POST(req) {
   const supabase = supabaseService();
   if (!supabase) {
     // Env not wired yet — don't lose the lead silently; surface it in logs.
-    console.log("[demo-request] (no Supabase configured):", { name, email, hospice, ccn, phone, message });
+    console.log("[demo-request] (no Supabase configured):", { name, email, hospice, ccn, phone, message, source });
     return NextResponse.json({ ok: true, stored: false });
   }
 
   const { error } = await supabase.from("demo_leads").insert({
     name, email, hospice_name: hospice, ccn: ccn || null, phone: phone || null, message: message || null,
-    source: "marketing_site",
+    source,
   });
 
   if (error) {

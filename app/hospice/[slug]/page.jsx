@@ -103,6 +103,47 @@ export async function generateMetadata({ params }) {
   }
 }
 
+// "Is this your hospice?" claim band — navy card, gold accent. Renders a
+// generic variant when name/ccn are missing (including the fail-soft page).
+function ClaimBand({ name, ccn, className = '' }) {
+  const query = [
+    ccn ? `ccn=${encodeURIComponent(ccn)}` : null,
+    name ? `agency=${encodeURIComponent(name)}` : null,
+    'src=claim',
+  ]
+    .filter(Boolean)
+    .join('&')
+  return (
+    <section
+      className={`overflow-hidden rounded-xl p-6 sm:p-8 ${className}`}
+      style={{
+        background:
+          'radial-gradient(700px 320px at 85% -20%, rgba(184, 134, 63, 0.18), transparent 60%), #0e1830',
+        border: '1px solid #1E2C4E',
+        borderTop: '3px solid #b8863f',
+      }}
+    >
+      <div className="eyebrow" style={{ color: '#E8CFA0' }}>
+        For {name || 'hospice'} leadership
+      </div>
+      <h2 className="font-display mt-3 text-2xl text-white sm:text-3xl">
+        Is this your hospice?
+      </h2>
+      <p className="mt-3 max-w-xl text-sm" style={{ color: '#AEBAD0' }}>
+        This page shows your published CMS data. See the full picture behind it
+        — every measure explained, your PEPPER and CAP alongside, and what to
+        fix first.
+      </p>
+      <Link
+        href={`/demo?${query}`}
+        className="mt-5 inline-flex rounded-lg bg-[#E8CFA0] px-5 py-2.5 text-sm font-medium text-[#0e1830] hover:bg-[#f0dcb6]"
+      >
+        Claim your walkthrough
+      </Link>
+    </section>
+  )
+}
+
 function Stat({ label, value, sub }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-5">
@@ -151,6 +192,7 @@ export default async function Page({ params }) {
               Search all hospices &rarr;
             </Link>
           </p>
+          <ClaimBand name={null} ccn={null} className="mt-10" />
         </div>
       </div>
     )
@@ -519,6 +561,8 @@ export default async function Page({ params }) {
           </div>
         </section>
 
+        <ClaimBand name={a.hospice_name} ccn={a.ccn} className="mb-10" />
+
         <NearbyHospices
           items={nearby}
           stateFullName={stateFull}
@@ -554,7 +598,11 @@ export default async function Page({ params }) {
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
-              href="/demo"
+              href={
+                a.ccn
+                  ? `/demo?ccn=${encodeURIComponent(a.ccn)}&agency=${encodeURIComponent(a.hospice_name || '')}`
+                  : '/demo'
+              }
               className="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-amber-500"
             >
               Book a demo

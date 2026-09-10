@@ -17,7 +17,26 @@ const POINTS = [
   "Walk away with a prioritized list of what to fix first",
 ];
 
-export default function Demo() {
+// Query params are display text only — never rendered as HTML. Strip angle
+// brackets, cap lengths, and ignore anything that isn't a plain string.
+function cleanParam(v, max) {
+  if (typeof v !== "string") return "";
+  return v.replace(/[<>]/g, "").trim().slice(0, max);
+}
+
+export default function Demo({ searchParams }) {
+  const ccn = cleanParam(searchParams?.ccn, 20);
+  const agency = cleanParam(searchParams?.agency, 120);
+  const src = searchParams?.src === "claim" ? "claim" : "";
+  const claiming = Boolean(ccn || agency);
+
+  const headline = claiming
+    ? `Claiming ${agency || "your hospice"}?`
+    : "See your whole compliance picture in 20 minutes.";
+  const sub = claiming
+    ? "Book the walkthrough — we pull your full breakdown live on the call. Pricing follows the demo."
+    : "Book the demo — we pull your CCN live on the call and show you exactly what CMS sees. Pricing follows the demo.";
+
   return (
     <>
       <section className="hero-navy relative overflow-hidden">
@@ -27,10 +46,10 @@ export default function Demo() {
             <div>
               <div className="eyebrow animate-fade-up" style={{ color: "#E8CFA0" }}>Book a demo</div>
               <h1 className="font-display text-white mt-4 animate-fade-up" style={{ fontSize: "clamp(2.2rem, 4.4vw, 3.2rem)", lineHeight: 1.06 }}>
-                See your whole compliance picture in 20 minutes.
+                {headline}
               </h1>
               <p className="text-base md:text-lg mt-5 max-w-md animate-fade-up" style={{ color: "#AEBAD0", animationDelay: "80ms" }}>
-                Book the demo — we pull your CCN live on the call and show you exactly what CMS sees. Pricing follows the demo.
+                {sub}
               </p>
               <ul className="mt-7 space-y-3 animate-fade-up" style={{ animationDelay: "140ms" }}>
                 {POINTS.map((p) => (
@@ -48,7 +67,7 @@ export default function Demo() {
             </div>
 
             <Reveal>
-              <DemoForm />
+              <DemoForm initialHospice={agency} initialCcn={ccn} src={src} />
             </Reveal>
           </div>
         </div>

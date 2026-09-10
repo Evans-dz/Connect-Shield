@@ -62,6 +62,7 @@ export default function Footer() {
           {[
             { label: "About", href: "/about" },
             { label: "FAQ", href: "/faq" },
+            { label: "Regulatory Watch", href: "/regulatory-watch" },
             { label: "Security", href: "/security" },
             { label: "Privacy", href: "/privacy" },
             { label: "Terms", href: "/terms" },
