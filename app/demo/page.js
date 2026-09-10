@@ -27,7 +27,7 @@ function cleanParam(v, max) {
 export default function Demo({ searchParams }) {
   const ccn = cleanParam(searchParams?.ccn, 20);
   const agency = cleanParam(searchParams?.agency, 120);
-  const src = searchParams?.src === "claim" ? "claim" : "";
+  const src = ["claim", "share"].includes(searchParams?.src) ? searchParams.src : "";
   const claiming = Boolean(ccn || agency);
 
   const headline = claiming

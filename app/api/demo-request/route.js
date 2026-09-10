@@ -20,7 +20,7 @@ export async function POST(req) {
 
   // Attribution: whitelist only. 'claim' (the agency-page claim band) maps to
   // 'claim_page'; anything else — absent, junk, or unknown — stays the default.
-  const SRC_WHITELIST = { claim: "claim_page" };
+  const SRC_WHITELIST = { claim: "claim_page", share: "share_link" };
   const src = typeof body.src === "string" ? body.src.trim() : "";
   const source = SRC_WHITELIST[src] || "marketing_site";
 

@@ -2,9 +2,10 @@
 import { useState } from "react";
 import { Link2, Loader2, Check, Copy, AlertCircle } from "lucide-react";
 
-// "Create share link" — POSTs to /api/share for the given CCN, then copies the
-// public snapshot URL to the clipboard. The link shows published CMS data only
-// (see /s/[token]) and expires after 15 days.
+// "Create preview link" — POSTs to /api/share for the given CCN, then copies
+// the read-only portal preview URL to the clipboard. The link renders published
+// CMS data only, with every other portal tab visibly locked (see /s/[token]),
+// and expires after 15 days.
 //
 // Degrades honestly: 401/500/network failures render a one-line error, never a
 // crash. Requires the share_links migration; until it runs, the server answers
@@ -61,7 +62,7 @@ export default function ShareLinkButton({ ccn }) {
           style={{ background: "#B8863F", color: "#0E1830" }}
         >
           {state === "creating" ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
-          {state === "creating" ? "Creating link" : url ? "Create new link" : "Create share link"}
+          {state === "creating" ? "Creating link" : url ? "Create new link" : "Create preview link"}
         </button>
         {url && (
           <button
@@ -89,7 +90,7 @@ export default function ShareLinkButton({ ccn }) {
       )}
 
       <div className="mt-2 text-[11px] font-mono" style={{ color: "#8992A3" }}>
-        Read-only snapshot of the published CMS score. No documents, no uploads. Expires in 15 days.
+        Read-only portal preview of the published CMS score — every other tab shows locked. No documents, no uploads. Expires in 15 days.
       </div>
     </div>
   );

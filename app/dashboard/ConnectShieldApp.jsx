@@ -7,6 +7,7 @@ import {
   Minus, Upload, DollarSign, AlertCircle, X,
   BarChart3, Calendar, Home, PieChart, Files, Library,
   Trash2, Eye, Search, Bot, Activity, Target, Zap, LogOut, ExternalLink,
+  Copy,
 } from "lucide-react";
 import { createClient } from "@/lib/auth/client";
 import ReportDownloadModal from "@/components/ReportDownloadModal";
@@ -2282,14 +2283,84 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
 }
 
 // ─── CHART REVIEW ─────────────────────────────────────────────────────────────
+// Sample is synthetic demo content. It is constructed so audit mode lands at
+// least one clear gap (comprehensive assessment 47 days stale vs the 15-day
+// §418.54(d) interval; IDG "no changes" on the same date as documented decline
+// vs §418.56) and at least one cannot-determine (certification and F2F carry
+// no visible dates, so §418.22 timing cannot be judged).
 const SAMPLE_CHART = `Recertification Narrative — Episode 3
 Patient has end-stage COPD. Patient continues to decline. Family reports patient is more tired.
 IDG note (same date): Goals reviewed, no changes.
 SN visit note (10 days prior): O2 sat 88% on 4L, increased dyspnea on exertion, patient using accessory muscles, unable to complete ADLs without rest breaks, weight down 6 lbs in 30 days.
 Physician certification: signed, no date visible on this copy.
-Face-to-face encounter note: "Patient seen, appropriate for hospice, continues to decline."`;
+Face-to-face encounter note: "Patient seen, appropriate for hospice, continues to decline."
+Comprehensive assessment: last documented update 47 days prior to this note per the EMR audit trail.`;
+
+const CHART_DISCLAIMER = "Informational — not a compliance determination, legal advice, or clinical advice. Only a surveyor determines compliance.";
+
+// Auditor persona with a curated CoP requirements list embedded in the prompt.
+const AUDIT_SYSTEM_PROMPT = `You are a hospice clinical documentation auditor for Connect Shield. You will receive excerpts of hospice clinical documentation — certifications, recertification narratives, IDG notes, visit notes, assessments, election statements, clinical record excerpts. Audit ONLY what is provided against the Medicare Hospice Conditions of Participation requirements listed below. You are checking what the documentation shows, not judging care quality.
+
+REQUIREMENTS TO CHECK (42 CFR Part 418):
+- §418.22(a)(4): a face-to-face encounter by a hospice physician or nurse practitioner is required before recertification for the 3rd benefit period and every subsequent period, no more than 30 calendar days before the new period begins, with a dated attestation by the practitioner.
+- §418.22: certifications and recertifications must include a physician narrative supporting a terminal prognosis of 6 months or less, and must be signed and dated.
+- §418.24: the election statement must identify the hospice, acknowledge the palliative rather than curative nature of hospice care and the waiver of certain Medicare services, state the effective date, and be signed by the patient or representative.
+- §418.25: admission requires certification of terminal illness supported by clinical documentation of eligibility for the 6-month prognosis.
+- §418.54(b): the comprehensive assessment must be completed within 5 calendar days of election; §418.54(d): it must be updated at least every 15 days.
+- §418.56(c)-(d): the interdisciplinary group must review and revise the plan of care at the intervals specified in the plan and whenever the patient's condition changes; documented clinical decline alongside a care plan marked "no changes" is a discrepancy to flag.
+- §418.58: QAPI program activities must be documented.
+- §418.104: the clinical record must be complete, promptly filed, and every entry authenticated — signed and dated by the person making it.
+
+Return ONE JSON object and nothing else, in exactly this shape:
+{"docType":"a short label for what this documentation is","summary":"2 to 4 plain-English sentences: what was reviewed and the overall documentation picture","findings":[{"item":"short label","regulation":"42 CFR §418.xx","status":"met|gap|cannot-determine","detail":"what the documentation shows and the concrete fix"}],"cannotAssess":["requirements from the list above that the provided text does not touch at all"],"looksGood":["things the documentation demonstrably does well, up to 5 items"]}
+
+Rules: Base every finding ONLY on the provided content — never invent dates, signatures, values, or requirements beyond the list above. Use status "cannot-determine" whenever the timing or dates needed to judge a requirement are absent from the text; never guess at timing. List requirements the provided text does not cover in cannotAssess rather than speculating about them. If a category has nothing, use an empty array. Inside the JSON strings use plain prose only — no markdown, asterisks, headers, backticks, or emojis.`;
+
+const AUDIT_STATUS_STYLES = {
+  met: { label: "Met", bg: "#E9F6EF", fg: "#2E7D57" },
+  gap: { label: "Gap", bg: "#F7F0E1", fg: "#9A6B23" },
+  "cannot-determine": { label: "Cannot determine", bg: "#EEF1F5", fg: "#64708A" },
+};
+
+// Client-side pre-send scrub: mask SSN, phone and email patterns before the
+// text leaves the browser. Deliberate tradeoff — dates and names are NOT
+// scrubbed: dates are clinically necessary for timing findings (F2F windows,
+// assessment intervals), and name detection is unreliable enough to mangle
+// clinical text, so the de-identify notice above the dropzone carries that
+// responsibility. Image uploads bypass this scrub entirely (pixels, not
+// text) — the same notice covers them. Nothing is persisted either way.
+function scrubIdentifiers(text) {
+  return text
+    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, "[REDACTED-SSN]")
+    .replace(/\(?\b\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g, "[REDACTED-PHONE]")
+    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, "[REDACTED-EMAIL]");
+}
+
+// Plain-text rendering of a result (either mode) for the copy button.
+function chartResultToText(r) {
+  const L = [];
+  if (r.docType) L.push(`Document type: ${r.docType}`);
+  if (r.summary) L.push(r.summary);
+  if (Array.isArray(r.findings) && r.findings.length) {
+    L.push("", "Findings:");
+    r.findings.forEach((f) => {
+      const status = (AUDIT_STATUS_STYLES[f.status] || {}).label || f.status || "";
+      L.push(`- [${status}] ${f.item}${f.regulation ? ` (${f.regulation})` : ""} — ${f.detail || ""}`.trimEnd());
+    });
+  }
+  if (Array.isArray(r.keyData) && r.keyData.length) { L.push("", "Key data:"); r.keyData.forEach((k) => L.push(`- ${k}`)); }
+  if (Array.isArray(r.needsAttention) && r.needsAttention.length) {
+    L.push("", "Needs attention:");
+    r.needsAttention.forEach((n) => L.push(`- ${typeof n === "string" ? n : [n.item, n.detail].filter(Boolean).join(" — ")}`));
+  }
+  if (Array.isArray(r.cannotAssess) && r.cannotAssess.length) { L.push("", "Not assessable from this document:"); r.cannotAssess.forEach((c) => L.push(`- ${c}`)); }
+  if (Array.isArray(r.looksGood) && r.looksGood.length) { L.push("", "Looks good:"); r.looksGood.forEach((g) => L.push(`- ${g}`)); }
+  L.push("", CHART_DISCLAIMER);
+  return L.join("\n");
+}
 
 function ChartReview() {
+  const [mode, setMode] = useState("explain"); // "explain" | "audit"
   const [files, setFiles] = useState([]);
   const [pasted, setPasted] = useState("");
   const [loading, setLoading] = useState(false);
@@ -2298,7 +2369,10 @@ function ChartReview() {
   const [raw, setRaw] = useState("");
   const [error, setError] = useState(null);
   const [dragOver, setDragOver] = useState(false);
+  const [copied, setCopied] = useState(false);
   const fileRef = useRef();
+  const copyTimerRef = useRef(null);
+  useEffect(() => () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }, []);
 
   const addFiles = (list) => {
     const arr = Array.from(list);
@@ -2307,13 +2381,24 @@ function ChartReview() {
   const onDrop = (e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); };
   const onSelect = (e) => { addFiles(e.target.files); e.target.value = ""; };
   const removeFile = (name) => setFiles((prev) => prev.filter((f) => f.name !== name));
-  const clearAll = () => { setFiles([]); setPasted(""); setResult(null); setRaw(""); setError(null); setProgress(""); };
+  const clearAll = () => { setFiles([]); setPasted(""); setResult(null); setRaw(""); setError(null); setProgress(""); setCopied(false); };
+  const loadSample = () => { setPasted(SAMPLE_CHART); setResult(null); setRaw(""); setError(null); };
+
+  const copyFindings = async () => {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(chartResultToText(result));
+      setCopied(true);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 1800);
+    } catch {}
+  };
 
   const empty = files.length === 0 && !pasted.trim();
 
   const analyze = async () => {
     if (empty) return;
-    setLoading(true); setError(null); setResult(null); setRaw("");
+    setLoading(true); setError(null); setResult(null); setRaw(""); setCopied(false);
     try {
       let textContent = "";
       const images = [];
@@ -2324,20 +2409,22 @@ function ChartReview() {
         if (r.kind === "image") images.push(r.image);
         else textContent += `=== FILE: ${file.name} ===\n${(r.text || "").slice(0, 12000)}\n\n`;
       }
-      textContent = textContent.slice(0, 24000);
+      // Mask SSN / phone / email patterns before anything leaves the browser.
+      textContent = scrubIdentifiers(textContent).slice(0, 24000);
       setProgress("Analyzing…");
-      const system = `You are a hospice operations and compliance analyst for Connect Shield. You will receive the contents of one or more documents a hospice uploaded — it could be any report (PS&R, PEPPER, Beneficiary Count, CAHPS, survey, cost report), a clinical note, a chart, a policy, an email, a spreadsheet, or anything else. Read it and explain it in plain English for a hospice owner or administrator who is not a data expert.
+      const explainSystem = `You are a hospice operations and compliance analyst for Connect Shield. You will receive the contents of one or more documents a hospice uploaded — it could be any report (PS&R, PEPPER, Beneficiary Count, CAHPS, survey, cost report), a clinical note, a chart, a policy, an email, a spreadsheet, or anything else. Read it and explain it in plain English for a hospice owner or administrator who is not a data expert.
 
 Return ONE JSON object and nothing else, in exactly this shape:
 {"docType":"a short label for what this document is","summary":"2 to 4 plain-English sentences: what this document is and the single most important takeaway","keyData":["the most important numbers or facts found, each stated plainly with context, up to 8 items"],"needsAttention":[{"item":"short label","detail":"what the concern is and the concrete action to take"}],"looksGood":["things the document shows the clinic is doing well, up to 5 items"]}
 
 Rules: Base every statement ONLY on the provided content — never invent numbers, findings, or requirements. You are NOT limited to compliance; explain whatever the document actually contains, and flag compliance concerns only when the content supports them. If a category has nothing, use an empty array. Inside the JSON strings use plain prose only — no markdown, asterisks, headers, backticks, or emojis.`;
+      const system = mode === "audit" ? AUDIT_SYSTEM_PROMPT : explainSystem;
       const rawText = await callClaudeDocs(system, textContent, images, 2000);
       setRaw(rawText);
       const clean = rawText.replace(/^```json\s*/i, "").replace(/^```\s*/, "").replace(/```\s*$/, "").trim();
       let parsed = null;
       try { parsed = JSON.parse(clean); } catch {}
-      if (parsed && (parsed.summary || parsed.keyData)) setResult(parsed);
+      if (parsed && (parsed.summary || parsed.keyData || parsed.findings)) setResult(parsed);
     } catch (e) {
       setError("Analysis error: " + e.message);
     } finally { setLoading(false); setProgress(""); }
@@ -2347,12 +2434,35 @@ Rules: Base every statement ONLY on the provided content — never invent number
     <div className="space-y-5">
       <div>
         <div style={{ fontFamily: "Fraunces, serif", color: "#16202E" }} className="text-2xl">Document Intelligence</div>
-        <p className="text-sm mt-1" style={{ color: "#64708A" }}>
-          Upload or paste any document — a report, note, chart, policy, spreadsheet, or image — and get a plain-English breakdown of what it says, what needs attention, and what looks good.
-        </p>
+        {mode === "explain" ? (
+          <p className="text-sm mt-1" style={{ color: "#64708A" }}>
+            Upload or paste any document — a report, note, chart, policy, spreadsheet, or image — and get a plain-English breakdown of what it says, what needs attention, and what looks good.
+          </p>
+        ) : (
+          <p className="text-sm mt-1" style={{ color: "#64708A" }}>
+            Upload or paste hospice clinical documentation and get it checked against the Medicare Conditions of Participation — what the documents show is met, where the gaps are, and what they do not show at all.
+          </p>
+        )}
+      </div>
+
+      <div className="inline-flex rounded-xl p-1 gap-1" style={{ background: "#EEF1F5" }}>
+        {[["explain", "Explain document"], ["audit", "Audit chart vs CoPs"]].map(([m, label]) => (
+          <button key={m} onClick={() => setMode(m)}
+            className="rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors"
+            style={mode === m ? { background: "#14213D", color: "#FFFFFF" } : { background: "transparent", color: "#64708A" }}>
+            {label}
+          </button>
+        ))}
       </div>
 
       <div className="rounded-2xl p-5 space-y-4" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
+        <div className="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5" style={{ background: "#F5F6F8" }}>
+          <ShieldCheck size={15} color="#B8863F" className="shrink-0 mt-0.5" />
+          <p className="text-xs" style={{ color: "#64708A" }}>
+            <span className="font-medium" style={{ color: "#16202E" }}>De-identify first:</span> remove patient names, DOB, MRN. Documents are analyzed in memory and never stored.
+          </p>
+        </div>
+
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
@@ -2394,6 +2504,11 @@ Rules: Base every statement ONLY on the provided content — never invent number
             {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
             {loading ? (progress || "Analyzing…") : "Analyze"}
           </button>
+          <button onClick={loadSample} disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm"
+            style={{ background: "#FFFFFF", color: "#64708A", border: "1px solid #E3E7ED" }}>
+            <FileText size={13} /> Load sample chart
+          </button>
           <button onClick={clearAll} disabled={loading}
             className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm"
             style={{ background: "#FFFFFF", color: "#64708A", border: "1px solid #E3E7ED" }}>
@@ -2407,12 +2522,53 @@ Rules: Base every statement ONLY on the provided content — never invent number
       {result && (
         <div className="rounded-2xl p-5 space-y-4" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED" }}>
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs uppercase tracking-widest font-mono" style={{ color: "#64708A" }}>Summary</span>
-              {result.docType && <span className="text-[10px] font-mono px-2 py-0.5 rounded" style={{ background: "#F5F6F8", color: "#B8863F" }}>{result.docType}</span>}
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xs uppercase tracking-widest font-mono" style={{ color: "#64708A" }}>Summary</span>
+                {result.docType && <span className="text-[10px] font-mono px-2 py-0.5 rounded" style={{ background: "#F5F6F8", color: "#B8863F" }}>{result.docType}</span>}
+              </div>
+              <button onClick={copyFindings}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium shrink-0"
+                style={{ background: "#F5F6F8", color: copied ? "#2E7D57" : "#64708A" }}>
+                {copied ? <CheckCircle2 size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy findings"}
+              </button>
             </div>
             <p className="text-sm" style={{ color: "#16202E" }}>{result.summary}</p>
           </div>
+
+          {Array.isArray(result.findings) && result.findings.length > 0 && (
+            <div>
+              <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>Findings</div>
+              <div className="space-y-2">
+                {result.findings.map((f, i) => {
+                  const s = AUDIT_STATUS_STYLES[f.status] || AUDIT_STATUS_STYLES["cannot-determine"];
+                  return (
+                    <div key={i} className="p-3 rounded-xl" style={{ background: "#F9FAFB", border: "1px solid #EEF1F5" }}>
+                      <div className="flex items-center flex-wrap gap-2">
+                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0" style={{ background: s.bg, color: s.fg }}>{s.label}</span>
+                        <span className="text-sm font-medium" style={{ color: "#16202E" }}>{f.item}</span>
+                        {f.regulation && <span className="text-xs font-mono" style={{ color: "#64708A" }}>{f.regulation}</span>}
+                      </div>
+                      {f.detail && <div className="text-sm mt-1.5" style={{ color: "#64708A" }}>{f.detail}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {Array.isArray(result.cannotAssess) && result.cannotAssess.length > 0 && (
+            <div>
+              <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>Not assessable from this document</div>
+              <ul className="space-y-1.5">
+                {result.cannotAssess.map((c, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "#64708A" }}>
+                    <Minus size={14} color="#8992A3" className="shrink-0 mt-0.5" /><span>{c}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {Array.isArray(result.keyData) && result.keyData.length > 0 && (
             <div>
@@ -2454,6 +2610,12 @@ Rules: Base every statement ONLY on the provided content — never invent number
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {Array.isArray(result.findings) && (
+            <div className="text-[11px] font-mono pt-3" style={{ color: "#8992A3", borderTop: "1px solid #EEF1F5" }}>
+              {CHART_DISCLAIMER}
             </div>
           )}
         </div>

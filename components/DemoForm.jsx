@@ -19,7 +19,7 @@ export default function DemoForm({ initialHospice = "", initialCcn = "", src = "
   });
   const [state, setState] = useState("idle"); // idle | sending | done | error
   const [err, setErr] = useState("");
-  const source = src === "claim" ? "claim" : "";
+  const source = ["claim", "share"].includes(src) ? src : "";
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
