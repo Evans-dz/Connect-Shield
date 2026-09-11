@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Clock, ExternalLink } from "lucide-react";
 import Reveal from "@/components/Reveal";
 import { SITE } from "@/lib/site";
-import { supabasePublic } from "@/lib/supabase";
+import { supabasePublic, supabaseService } from "@/lib/supabase";
 
 // Public, indexable mirror of the dashboard's Regulatory Watch feed.
 // Re-renders hourly so newly published updates appear without a redeploy.
@@ -17,10 +17,13 @@ export const metadata = {
 
 // ── Live feed ────────────────────────────────────────────────────────────────
 // Published rows only (status='published' is the human-reviewed, public-safe
-// set — the same rows the client dashboard feed shows). Any failure — missing
-// env, unreachable database, RLS — degrades to an honest empty state.
+// set — the same rows the client dashboard feed shows). reg_updates RLS only
+// grants authenticated reads, so the anon client sees nothing — this server
+// component reads with the service role instead (never exposed to the client)
+// and the hard status filter keeps drafts/archived rows out. Any failure
+// degrades to an honest empty state.
 async function getPublishedUpdates() {
-  const db = supabasePublic();
+  const db = supabaseService() || supabasePublic();
   if (!db) return [];
   try {
     const { data, error } = await db
