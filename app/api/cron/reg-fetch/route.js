@@ -124,6 +124,20 @@ export async function GET(req) {
   const summary = { ok: true, days, fetched: docs.length, candidates: candidates.length, alreadyQueued: 0, inserted: 0 };
 
   const db = supabaseService();
+
+  // Queue visibility: how many drafts are sitting in /admin/reg-review right
+  // now, and how many rows exist per status. Monitoring only — never blocks.
+  if (db) {
+    try {
+      const { data: statusRows } = await db.from("reg_updates").select("status");
+      const counts = {};
+      for (const r of statusRows || []) counts[r.status || "unknown"] = (counts[r.status || "unknown"] || 0) + 1;
+      summary.queue = counts;
+    } catch {
+      /* monitoring only */
+    }
+  }
+
   if (!db) {
     // No database — mirror weekly-digest: report, never crash. A dry run
     // still shows the full mapping so the fetch half can be verified alone.
