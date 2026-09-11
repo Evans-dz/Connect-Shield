@@ -53,6 +53,35 @@ nothing.
 Query + mapping live in `app/api/cron/reg-fetch/mapping.mjs`, shared with the
 preview script below so the two can't drift.
 
+### "New drafts" email notification
+
+A **live run that inserts at least one draft** emails
+`admin@connect-shield.com` (the `ADMIN_NOTIFY` const at the top of
+`route.js`) so the review queue never sits unnoticed between Monday logins:
+one email per run, listing every inserted draft — severity, tag, publication
+date, title, trimmed summary, source link — with a **Review and publish**
+button into `/admin/reg-review`. Dry runs and zero-insert runs never email.
+
+Delivery is best-effort: a failed or skipped send **never fails the run** —
+the drafts are already inserted, and the response reports what happened via
+`emailSent`:
+
+| `emailSent` | Meaning |
+|---|---|
+| `true` | notification delivered to Resend |
+| `"skipped"` | nothing inserted, or `RESEND_API_KEY` not set (send no-ops with a console.warn) |
+| `false` | send attempted and failed (run still `ok: true`) |
+
+Dry runs instead report `wouldEmail` (would a live run with this result have
+emailed?) plus `recipient`, so the wiring is testable without any email keys.
+
+Sends go through `lib/email.js` and need **`RESEND_API_KEY`** — a free
+[resend.com](https://resend.com) account is enough. Verify the
+`connect-shield.com` domain there (or use Resend's test sender via
+`EMAIL_FROM` while unverified), create an API key, and set it in the Vercel
+project env. It is the **same key the weekly digest uses** — set it once,
+both emails work.
+
 ## 2. The review queue — `/admin/reg-review`
 
 Log in as `admin@connect-shield.com` (the gate is `ADMIN_EMAIL` in
@@ -86,8 +115,9 @@ curl -H "Authorization: Bearer $CRON_SECRET" \
 ```
 
 Responses: `503` = `CRON_SECRET` not set on the project, `401` = wrong bearer,
-otherwise JSON with `fetched` / `candidates` / `alreadyQueued` / `inserted`
-(or `wouldInsert` rows on a dry run).
+otherwise JSON with `fetched` / `candidates` / `alreadyQueued` / `inserted` /
+`emailSent` (or, on a dry run, `wouldInsert` rows plus `wouldEmail` +
+`recipient` — a dry run never sends email).
 
 ## 4. Local preview (no server, no secret, no database)
 
@@ -108,7 +138,9 @@ it). Vercel automatically sends it as the Bearer header on cron invocations.
 Without it, both cron endpoints refuse to run (503). The fetcher also needs
 `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_KEY` (already required
 app-wide); with Supabase unconfigured it reports `skipped` instead of
-crashing.
+crashing. For the new-drafts notification email, set **`RESEND_API_KEY`**
+(shared with the weekly digest — see the notification section under §1);
+without it the fetcher still runs fine and reports `emailSent: "skipped"`.
 
 Zero PHI anywhere in this pipeline: every input is a public Federal Register
 document and every output is Connect Shield's own regulatory summary.

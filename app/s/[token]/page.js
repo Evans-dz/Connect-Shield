@@ -99,7 +99,39 @@ async function fetchPreviewRow(db, ccn) {
   }
 }
 
+// Dev-only sample so the preview layout can be inspected without a real link.
+// NODE_ENV guard means this token renders the invalid state in production.
+const DEV_SAMPLE =
+  process.env.NODE_ENV === "development"
+    ? {
+        row: {
+          hospice_name: "Canyon Rim Hospice, LLC",
+          ccn: "437777",
+          city: "St George",
+          state: "UT",
+          fy2025_total_ssvi: 9,
+          fy2025_spending_score: 4,
+          fy2025_utilization_score: 5,
+          fy2024_total_ssvi: 11,
+          pct_national: 82,
+          rank_state: 6,
+          n_state: 27,
+          fy2025_live_discharge: true,
+          fy2025_los_180: true,
+          fy2025_nursing_facility: false,
+          fy2025_no_chc_gip: true,
+          fy2025_last_two_days: false,
+          fy2025_sn_minutes: true,
+          fy2025_weekend_visits: false,
+          fy2025_return_7days: true,
+        },
+        stateAvg: { avg: "6.1", count: 27 },
+        expiresAt: new Date(Date.now() + 15 * 864e5).toISOString(),
+      }
+    : null;
+
 async function loadSnapshot(token) {
+  if (token === "demo" && DEV_SAMPLE) return DEV_SAMPLE;
   try {
     if (!token || token.length > 64) return null;
     const admin = supabaseService();
@@ -232,7 +264,10 @@ export default async function SnapshotPage({ params }) {
   const goldBtn = "inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium";
 
   return (
-    <div style={{ background: "#0E1830" }}>
+    // Darker page ground frames the preview as a centered app window instead of
+    // a full-bleed sheet — the shell caps at 6xl and centers on wide monitors.
+    <div className="min-h-screen" style={{ background: "#0A1120" }}>
+    <div className="max-w-6xl mx-auto min-h-screen" style={{ background: "#0E1830", borderLeft: "1px solid #1B2A47", borderRight: "1px solid #1B2A47" }}>
       {/* ── Top bar ── */}
       <header className="px-4 md:px-6 py-3" style={{ borderBottom: "1px solid #243354" }}>
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -292,7 +327,7 @@ export default async function SnapshotPage({ params }) {
 
         {/* ── Main panel ── */}
         <main className="flex-1 min-w-0 px-4 md:px-8 py-7 md:py-9">
-          <div className="max-w-2xl">
+          <div className="max-w-3xl mx-auto">
             <div className="eyebrow" style={{ color: "#E8CFA0" }}>Your published CMS picture · FY2025</div>
 
             <div className="rounded-2xl mt-4" style={{ background: "#14213D", border: "1px solid #243354" }}>
@@ -429,6 +464,7 @@ export default async function SnapshotPage({ params }) {
           </div>
         </main>
       </div>
+    </div>
     </div>
   );
 }

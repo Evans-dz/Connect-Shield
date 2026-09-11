@@ -4,7 +4,7 @@ import {
   FileText, ShieldCheck, MessageSquare, AlertTriangle,
   CheckCircle2, ChevronDown, ChevronRight, Send, Sparkles,
   TrendingUp, TrendingDown, Clock, BookOpen, Loader2,
-  Minus, Upload, DollarSign, AlertCircle, X,
+  Upload, DollarSign, AlertCircle, X,
   BarChart3, Calendar, Home, PieChart, Files, Library,
   Trash2, Eye, Search, Bot, Activity, Target, Zap, LogOut, ExternalLink,
   Copy,
@@ -2283,44 +2283,28 @@ function UploadHub({ onAnalysisData, hasData, onDocsUpdated, onSSVIData, hideLoo
 }
 
 // ─── CHART REVIEW ─────────────────────────────────────────────────────────────
-// Sample is synthetic demo content. It is constructed so audit mode lands at
-// least one clear gap (comprehensive assessment 47 days stale vs the 15-day
-// §418.54(d) interval; IDG "no changes" on the same date as documented decline
-// vs §418.56) and at least one cannot-determine (certification and F2F carry
-// no visible dates, so §418.22 timing cannot be judged).
+// Sample is synthetic demo content. It gives survey-readiness mode real
+// material to work with: a boilerplate recert narrative and F2F note, an IDG
+// "no changes" entry on the same date as documented decline, and a stale
+// comprehensive assessment — the kinds of things a surveyor actually notices.
 const SAMPLE_CHART = `Recertification Narrative — Episode 3
 Patient has end-stage COPD. Patient continues to decline. Family reports patient is more tired.
 IDG note (same date): Goals reviewed, no changes.
 SN visit note (10 days prior): O2 sat 88% on 4L, increased dyspnea on exertion, patient using accessory muscles, unable to complete ADLs without rest breaks, weight down 6 lbs in 30 days.
-Physician certification: signed, no date visible on this copy.
 Face-to-face encounter note: "Patient seen, appropriate for hospice, continues to decline."
-Comprehensive assessment: last documented update 47 days prior to this note per the EMR audit trail.`;
+Comprehensive assessment: last documented update 47 days prior to this note.`;
 
 const CHART_DISCLAIMER = "Informational — not a compliance determination, legal advice, or clinical advice. Only a surveyor determines compliance.";
 
-// Auditor persona with a curated CoP requirements list embedded in the prompt.
-const AUDIT_SYSTEM_PROMPT = `You are a hospice clinical documentation auditor for Connect Shield. You will receive excerpts of hospice clinical documentation — certifications, recertification narratives, IDG notes, visit notes, assessments, election statements, clinical record excerpts. Audit ONLY what is provided against the Medicare Hospice Conditions of Participation requirements listed below. You are checking what the documentation shows, not judging care quality.
-
-REQUIREMENTS TO CHECK (42 CFR Part 418):
-- §418.22(a)(4): a face-to-face encounter by a hospice physician or nurse practitioner is required before recertification for the 3rd benefit period and every subsequent period, no more than 30 calendar days before the new period begins, with a dated attestation by the practitioner.
-- §418.22: certifications and recertifications must include a physician narrative supporting a terminal prognosis of 6 months or less, and must be signed and dated.
-- §418.24: the election statement must identify the hospice, acknowledge the palliative rather than curative nature of hospice care and the waiver of certain Medicare services, state the effective date, and be signed by the patient or representative.
-- §418.25: admission requires certification of terminal illness supported by clinical documentation of eligibility for the 6-month prognosis.
-- §418.54(b): the comprehensive assessment must be completed within 5 calendar days of election; §418.54(d): it must be updated at least every 15 days.
-- §418.56(c)-(d): the interdisciplinary group must review and revise the plan of care at the intervals specified in the plan and whenever the patient's condition changes; documented clinical decline alongside a care plan marked "no changes" is a discrepancy to flag.
-- §418.58: QAPI program activities must be documented.
-- §418.104: the clinical record must be complete, promptly filed, and every entry authenticated — signed and dated by the person making it.
+// Survey-preparation consultant persona. Design lesson from the pilots: the
+// prompt must produce value from whatever the document is — never a wall of
+// "cannot determine" verdicts against requirements the document doesn't touch.
+const SURVEY_SYSTEM_PROMPT = `You are a hospice survey-preparation consultant for Connect Shield. You will receive the contents of one or more documents a hospice uploaded — a policy, QAPI meeting minutes, a past survey report or CMS-2567, IDG notes, a chart or clinical note, a spreadsheet, an email, or anything else. Your job is to help the agency prepare for a Medicare survey using whatever this document actually is: read it, then tell them what a surveyor would notice in it, where the preparation gaps are, what it shows they already do well, and what to prepare next. Work with the document you were given — never complain that it is the wrong kind of document.
 
 Return ONE JSON object and nothing else, in exactly this shape:
-{"docType":"a short label for what this documentation is","summary":"2 to 4 plain-English sentences: what was reviewed and the overall documentation picture","findings":[{"item":"short label","regulation":"42 CFR §418.xx","status":"met|gap|cannot-determine","detail":"what the documentation shows and the concrete fix"}],"cannotAssess":["requirements from the list above that the provided text does not touch at all"],"looksGood":["things the documentation demonstrably does well, up to 5 items"]}
+{"docType":"a short label for what this document is","summary":"2 to 4 plain-English sentences: what this document is and what it means for survey readiness","surveyorLens":["what a surveyor reviewing this document would notice or ask about, up to 6 items, each grounded in the actual content"],"gaps":[{"item":"short label","why":"why it matters in a survey","action":"the concrete preparation step to take"}],"strengths":["what this document shows the clinic already does well"],"prepNext":["prioritized next preparation steps implied by this document, up to 5 items"]}
 
-Rules: Base every finding ONLY on the provided content — never invent dates, signatures, values, or requirements beyond the list above. Use status "cannot-determine" whenever the timing or dates needed to judge a requirement are absent from the text; never guess at timing. List requirements the provided text does not cover in cannotAssess rather than speculating about them. If a category has nothing, use an empty array. Inside the JSON strings use plain prose only — no markdown, asterisks, headers, backticks, or emojis.`;
-
-const AUDIT_STATUS_STYLES = {
-  met: { label: "Met", bg: "#E9F6EF", fg: "#2E7D57" },
-  gap: { label: "Gap", bg: "#F7F0E1", fg: "#9A6B23" },
-  "cannot-determine": { label: "Cannot determine", bg: "#EEF1F5", fg: "#64708A" },
-};
+Rules: Base everything ONLY on the provided content — never invent dates, numbers, findings, or requirements. You may include a regulation reference such as 42 CFR §418.54 inside a string when the content clearly implicates one, but never issue per-requirement verdicts such as met, not met, or cannot determine. When the document has little survey relevance, say so plainly in the summary and leave surveyorLens and gaps as empty arrays rather than stretching. If any category has nothing, use an empty array. Inside the JSON strings use plain prose only — no markdown, asterisks, headers, backticks, or emojis.`;
 
 // Client-side pre-send scrub: mask SSN, phone and email patterns before the
 // text leaves the browser. Deliberate tradeoff — dates and names are NOT
@@ -2341,26 +2325,25 @@ function chartResultToText(r) {
   const L = [];
   if (r.docType) L.push(`Document type: ${r.docType}`);
   if (r.summary) L.push(r.summary);
-  if (Array.isArray(r.findings) && r.findings.length) {
-    L.push("", "Findings:");
-    r.findings.forEach((f) => {
-      const status = (AUDIT_STATUS_STYLES[f.status] || {}).label || f.status || "";
-      L.push(`- [${status}] ${f.item}${f.regulation ? ` (${f.regulation})` : ""} — ${f.detail || ""}`.trimEnd());
-    });
+  if (Array.isArray(r.surveyorLens) && r.surveyorLens.length) { L.push("", "Through a surveyor's eyes:"); r.surveyorLens.forEach((s) => L.push(`- ${s}`)); }
+  if (Array.isArray(r.gaps) && r.gaps.length) {
+    L.push("", "Gaps to close:");
+    r.gaps.forEach((g) => L.push(`- ${[g.item, g.why, g.action].filter(Boolean).join(" — ")}`));
   }
+  if (Array.isArray(r.strengths) && r.strengths.length) { L.push("", "Strengths:"); r.strengths.forEach((s) => L.push(`- ${s}`)); }
+  if (Array.isArray(r.prepNext) && r.prepNext.length) { L.push("", "Prepare next:"); r.prepNext.forEach((p, i) => L.push(`${i + 1}. ${p}`)); }
   if (Array.isArray(r.keyData) && r.keyData.length) { L.push("", "Key data:"); r.keyData.forEach((k) => L.push(`- ${k}`)); }
   if (Array.isArray(r.needsAttention) && r.needsAttention.length) {
     L.push("", "Needs attention:");
     r.needsAttention.forEach((n) => L.push(`- ${typeof n === "string" ? n : [n.item, n.detail].filter(Boolean).join(" — ")}`));
   }
-  if (Array.isArray(r.cannotAssess) && r.cannotAssess.length) { L.push("", "Not assessable from this document:"); r.cannotAssess.forEach((c) => L.push(`- ${c}`)); }
   if (Array.isArray(r.looksGood) && r.looksGood.length) { L.push("", "Looks good:"); r.looksGood.forEach((g) => L.push(`- ${g}`)); }
   L.push("", CHART_DISCLAIMER);
   return L.join("\n");
 }
 
 function ChartReview() {
-  const [mode, setMode] = useState("explain"); // "explain" | "audit"
+  const [mode, setMode] = useState("explain"); // "explain" | "survey"
   const [files, setFiles] = useState([]);
   const [pasted, setPasted] = useState("");
   const [loading, setLoading] = useState(false);
@@ -2418,13 +2401,13 @@ Return ONE JSON object and nothing else, in exactly this shape:
 {"docType":"a short label for what this document is","summary":"2 to 4 plain-English sentences: what this document is and the single most important takeaway","keyData":["the most important numbers or facts found, each stated plainly with context, up to 8 items"],"needsAttention":[{"item":"short label","detail":"what the concern is and the concrete action to take"}],"looksGood":["things the document shows the clinic is doing well, up to 5 items"]}
 
 Rules: Base every statement ONLY on the provided content — never invent numbers, findings, or requirements. You are NOT limited to compliance; explain whatever the document actually contains, and flag compliance concerns only when the content supports them. If a category has nothing, use an empty array. Inside the JSON strings use plain prose only — no markdown, asterisks, headers, backticks, or emojis.`;
-      const system = mode === "audit" ? AUDIT_SYSTEM_PROMPT : explainSystem;
+      const system = mode === "survey" ? SURVEY_SYSTEM_PROMPT : explainSystem;
       const rawText = await callClaudeDocs(system, textContent, images, 2000);
       setRaw(rawText);
       const clean = rawText.replace(/^```json\s*/i, "").replace(/^```\s*/, "").replace(/```\s*$/, "").trim();
       let parsed = null;
       try { parsed = JSON.parse(clean); } catch {}
-      if (parsed && (parsed.summary || parsed.keyData || parsed.findings)) setResult(parsed);
+      if (parsed && (parsed.summary || parsed.keyData || parsed.surveyorLens)) setResult(parsed);
     } catch (e) {
       setError("Analysis error: " + e.message);
     } finally { setLoading(false); setProgress(""); }
@@ -2440,13 +2423,13 @@ Rules: Base every statement ONLY on the provided content — never invent number
           </p>
         ) : (
           <p className="text-sm mt-1" style={{ color: "#64708A" }}>
-            Upload or paste hospice clinical documentation and get it checked against the Medicare Conditions of Participation — what the documents show is met, where the gaps are, and what they do not show at all.
+            Upload or paste any document — a policy, QAPI minutes, a past survey, IDG notes, a chart — and see it the way a surveyor would: what they would notice, where the gaps are, and what to prepare next.
           </p>
         )}
       </div>
 
       <div className="inline-flex rounded-xl p-1 gap-1" style={{ background: "#EEF1F5" }}>
-        {[["explain", "Explain document"], ["audit", "Audit chart vs CoPs"]].map(([m, label]) => (
+        {[["explain", "Explain document"], ["survey", "Survey readiness"]].map(([m, label]) => (
           <button key={m} onClick={() => setMode(m)}
             className="rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors"
             style={mode === m ? { background: "#14213D", color: "#FFFFFF" } : { background: "transparent", color: "#64708A" }}>
@@ -2536,37 +2519,65 @@ Rules: Base every statement ONLY on the provided content — never invent number
             <p className="text-sm" style={{ color: "#16202E" }}>{result.summary}</p>
           </div>
 
-          {Array.isArray(result.findings) && result.findings.length > 0 && (
+          {Array.isArray(result.surveyorLens) && result.surveyorLens.length > 0 && (
             <div>
-              <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>Findings</div>
+              <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>Through a surveyor's eyes</div>
+              <ul className="space-y-1.5">
+                {result.surveyorLens.map((s, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "#16202E" }}>
+                    <Eye size={14} color="#B8863F" className="shrink-0 mt-0.5" /><span>{s}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {Array.isArray(result.gaps) && result.gaps.length > 0 && (
+            <div>
+              <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>Gaps to close</div>
               <div className="space-y-2">
-                {result.findings.map((f, i) => {
-                  const s = AUDIT_STATUS_STYLES[f.status] || AUDIT_STATUS_STYLES["cannot-determine"];
-                  return (
-                    <div key={i} className="p-3 rounded-xl" style={{ background: "#F9FAFB", border: "1px solid #EEF1F5" }}>
-                      <div className="flex items-center flex-wrap gap-2">
-                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0" style={{ background: s.bg, color: s.fg }}>{s.label}</span>
-                        <span className="text-sm font-medium" style={{ color: "#16202E" }}>{f.item}</span>
-                        {f.regulation && <span className="text-xs font-mono" style={{ color: "#64708A" }}>{f.regulation}</span>}
-                      </div>
-                      {f.detail && <div className="text-sm mt-1.5" style={{ color: "#64708A" }}>{f.detail}</div>}
+                {result.gaps.map((g, i) => (
+                  <div key={i} className="flex gap-3 p-3 rounded-xl" style={{ background: "#F7F0E1", border: "1px solid #EDDFC2" }}>
+                    <AlertTriangle size={15} color="#9A6B23" className="shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium" style={{ color: "#16202E" }}>{typeof g === "string" ? g : g.item}</div>
+                      {g && g.why && <div className="text-sm mt-0.5" style={{ color: "#64708A" }}>{g.why}</div>}
+                      {g && g.action && (
+                        <div className="text-sm mt-1" style={{ color: "#9A6B23" }}>
+                          <span className="font-medium">Prep step:</span> {g.action}
+                        </div>
+                      )}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {Array.isArray(result.cannotAssess) && result.cannotAssess.length > 0 && (
+          {Array.isArray(result.strengths) && result.strengths.length > 0 && (
             <div>
-              <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>Not assessable from this document</div>
-              <ul className="space-y-1.5">
-                {result.cannotAssess.map((c, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "#64708A" }}>
-                    <Minus size={14} color="#8992A3" className="shrink-0 mt-0.5" /><span>{c}</span>
+              <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>Strengths</div>
+              <ul className="space-y-1">
+                {result.strengths.map((s, i) => (
+                  <li key={i} className="text-sm flex gap-2" style={{ color: "#16202E" }}>
+                    <CheckCircle2 size={14} className="shrink-0 mt-0.5" color="#2E9E62" />{s}
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {Array.isArray(result.prepNext) && result.prepNext.length > 0 && (
+            <div>
+              <div className="text-xs uppercase tracking-widest font-mono mb-2" style={{ color: "#64708A" }}>Prepare next</div>
+              <ol className="space-y-1.5">
+                {result.prepNext.map((p, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm" style={{ color: "#16202E" }}>
+                    <span className="shrink-0 w-5 h-5 rounded-full text-[11px] font-medium flex items-center justify-center" style={{ background: "#14213D", color: "#FFFFFF" }}>{i + 1}</span>
+                    <span className="pt-0.5">{p}</span>
+                  </li>
+                ))}
+              </ol>
             </div>
           )}
 
@@ -2613,7 +2624,7 @@ Rules: Base every statement ONLY on the provided content — never invent number
             </div>
           )}
 
-          {Array.isArray(result.findings) && (
+          {Array.isArray(result.surveyorLens) && (
             <div className="text-[11px] font-mono pt-3" style={{ color: "#8992A3", borderTop: "1px solid #EEF1F5" }}>
               {CHART_DISCLAIMER}
             </div>
