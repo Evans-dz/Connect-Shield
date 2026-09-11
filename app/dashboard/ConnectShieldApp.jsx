@@ -2299,12 +2299,53 @@ const CHART_DISCLAIMER = "Informational — not a compliance determination, lega
 // Survey-preparation consultant persona. Design lesson from the pilots: the
 // prompt must produce value from whatever the document is — never a wall of
 // "cannot determine" verdicts against requirements the document doesn't touch.
+// Salvage a JSON object that was cut off mid-generation. Walks the text
+// tracking string/escape state and the open-bracket stack, remembers the last
+// position where a complete value ended at a safe boundary (a closed object,
+// a closed array, or a closed string that is an array element), then trims to
+// that point and closes whatever is still open. Returns the parsed object or
+// null — never throws.
+function repairTruncatedJson(s) {
+  if (!s || s[0] !== "{") return null;
+  const stack = [];
+  let inStr = false, esc = false, lastSafe = -1, safeStack = [];
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') {
+        inStr = false;
+        // A string closing directly inside an array is a complete element.
+        if (stack[stack.length - 1] === "[") { lastSafe = i + 1; safeStack = stack.slice(); }
+      }
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === "{" || c === "[") stack.push(c);
+    else if (c === "}" || c === "]") {
+      stack.pop();
+      lastSafe = i + 1;
+      safeStack = stack.slice();
+    }
+  }
+  if (lastSafe <= 0) return null;
+  // Close what was open AT the cut point — brackets opened after it are gone.
+  const closers = safeStack.map((b) => (b === "{" ? "}" : "]")).reverse().join("");
+  const candidate = s.slice(0, lastSafe).replace(/,\s*$/, "") + closers;
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    return null;
+  }
+}
+
 const SURVEY_SYSTEM_PROMPT = `You are a hospice survey-preparation consultant for Connect Shield. You will receive the contents of one or more documents a hospice uploaded — a policy, QAPI meeting minutes, a past survey report or CMS-2567, IDG notes, a chart or clinical note, a spreadsheet, an email, or anything else. Your job is to help the agency prepare for a Medicare survey using whatever this document actually is: read it, then tell them what a surveyor would notice in it, where the preparation gaps are, what it shows they already do well, and what to prepare next. Work with the document you were given — never complain that it is the wrong kind of document.
 
 Return ONE JSON object and nothing else, in exactly this shape:
-{"docType":"a short label for what this document is","summary":"2 to 4 plain-English sentences: what this document is and what it means for survey readiness","surveyorLens":["what a surveyor reviewing this document would notice or ask about, up to 6 items, each grounded in the actual content"],"gaps":[{"item":"short label","why":"why it matters in a survey","action":"the concrete preparation step to take"}],"strengths":["what this document shows the clinic already does well"],"prepNext":["prioritized next preparation steps implied by this document, up to 5 items"]}
+{"docType":"a short label for what this document is","summary":"2 to 3 plain-English sentences: what this document is and what it means for survey readiness","surveyorLens":["what a surveyor reviewing this document would notice or ask about, up to 5 items, ONE sentence each, grounded in the actual content"],"gaps":[{"item":"short label","why":"one sentence: why it matters in a survey","action":"one or two short sentences: the concrete preparation step"}],"strengths":["what this shows the clinic already does well, short phrases, up to 4"],"prepNext":["prioritized next preparation steps, one short line each, up to 5"]}
 
-Rules: Base everything ONLY on the provided content — never invent dates, numbers, findings, or requirements. You may include a regulation reference such as 42 CFR §418.54 inside a string when the content clearly implicates one, but never issue per-requirement verdicts such as met, not met, or cannot determine. When the document has little survey relevance, say so plainly in the summary and leave surveyorLens and gaps as empty arrays rather than stretching. If any category has nothing, use an empty array. Inside the JSON strings use plain prose only — no markdown, asterisks, headers, backticks, or emojis.`;
+Rules: BE BRIEF — the reader is a busy administrator; every string obeys its stated length limit, no exceptions, and at most 5 gaps. Base everything ONLY on the provided content — never invent dates, numbers, findings, or requirements. You may include a regulation reference such as 42 CFR §418.54 inside a string when the content clearly implicates one, but never issue per-requirement verdicts such as met, not met, or cannot determine. When the document has little survey relevance, say so plainly in the summary and leave surveyorLens and gaps as empty arrays rather than stretching. If any category has nothing, use an empty array. Inside the JSON strings use plain prose only — no markdown, asterisks, headers, backticks, or emojis.`;
 
 // Client-side pre-send scrub: mask SSN, phone and email patterns before the
 // text leaves the browser. Deliberate tradeoff — dates and names are NOT
@@ -2402,12 +2443,22 @@ Return ONE JSON object and nothing else, in exactly this shape:
 
 Rules: Base every statement ONLY on the provided content — never invent numbers, findings, or requirements. You are NOT limited to compliance; explain whatever the document actually contains, and flag compliance concerns only when the content supports them. If a category has nothing, use an empty array. Inside the JSON strings use plain prose only — no markdown, asterisks, headers, backticks, or emojis.`;
       const system = mode === "survey" ? SURVEY_SYSTEM_PROMPT : explainSystem;
-      const rawText = await callClaudeDocs(system, textContent, images, 2000);
+      // Survey mode writes structurally longer JSON (lens + gaps + prep list);
+      // 2000 tokens truncated it mid-object and the parse failed. 4000 is the
+      // proxy's ceiling.
+      const rawText = await callClaudeDocs(system, textContent, images, mode === "survey" ? 4000 : 2000);
       setRaw(rawText);
       const clean = rawText.replace(/^```json\s*/i, "").replace(/^```\s*/, "").replace(/```\s*$/, "").trim();
       let parsed = null;
       try { parsed = JSON.parse(clean); } catch {}
+      if (!parsed) parsed = repairTruncatedJson(clean);
       if (parsed && (parsed.summary || parsed.keyData || parsed.surveyorLens)) setResult(parsed);
+      else if (clean.startsWith("{")) {
+        // JSON came back but is beyond salvage — never dump raw JSON at the
+        // user; a clean retry message beats a wall of braces.
+        setError("The analysis came back malformed. Hit Analyze again — this is usually a one-off.");
+        setRaw("");
+      }
     } catch (e) {
       setError("Analysis error: " + e.message);
     } finally { setLoading(false); setProgress(""); }
