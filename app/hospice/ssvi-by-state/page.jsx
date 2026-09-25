@@ -82,7 +82,7 @@ function CompositionCard({ title, note, items, half }) {
             <div className="flex items-baseline justify-between gap-3">
               <Link
                 href={`/hospice/state/${s.code.toLowerCase()}`}
-                className="relative text-sm font-medium text-slate-900 hover:text-amber-700 after:absolute after:-inset-3 after:content-['']"
+                className="relative text-sm font-medium text-slate-900 hover:text-amber-700 after:absolute after:-inset-x-4 after:-inset-y-3 after:content-['']"
               >
                 {s.code}
               </Link>
