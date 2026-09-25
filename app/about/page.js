@@ -2,9 +2,11 @@ import Link from "next/link";
 import { ArrowRight, EyeOff, FileCheck, Phone } from "lucide-react";
 import Reveal from "@/components/Reveal";
 import { SITE } from "@/lib/site";
+import { fitTitle } from "@/lib/title";
+import BreadcrumbLd from "@/components/BreadcrumbLd";
 
 export const metadata = {
-  title: "About Us: A Founder and a 20-Year Hospice Operator",
+  title: fitTitle("About Connect Shield: A Founder and a 20-Year Hospice Operator"),
   description:
     "Zac Evans and Justin Larsen started Connect Shield LLC in St. George, Utah, so hospices stay compliant and their billing never freezes. Meet the five-person team behind the platform.",
   alternates: { canonical: `${SITE.url}/about` },
@@ -49,6 +51,7 @@ const PRINCIPLES = [
 export default function About() {
   return (
     <>
+      <BreadcrumbLd trail={[{ name: "About", path: "/about" }]} />
       {/* Hero */}
       <section className="hero-navy relative overflow-hidden">
         <div className="index-field absolute inset-0" aria-hidden="true" />

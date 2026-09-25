@@ -5,6 +5,7 @@ import Script from "next/script";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { SITE } from "@/lib/site";
+import { TITLE_SUFFIX } from "@/lib/title";
 
 const fraunces = Fraunces({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-fraunces", display: "swap" });
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-inter", display: "swap" });
@@ -14,7 +15,7 @@ export const metadata = {
   metadataBase: new URL(SITE.url),
   title: {
     default: "Connect Shield | Hospice Compliance & SSVI Score Lookup",
-    template: "%s | Connect Shield",
+    template: `%s${TITLE_SUFFIX}`,
   },
   description: SITE.description,
   keywords: [

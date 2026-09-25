@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Mail, MapPin, Phone, PhoneCall, ArrowRight } from "lucide-react";
 import Reveal from "@/components/Reveal";
 import { SITE } from "@/lib/site";
+import BreadcrumbLd from "@/components/BreadcrumbLd";
 
 export const metadata = {
   title: "Contact: Call, Email, or Visit",
@@ -45,6 +46,7 @@ const REACH = [
 export default function Contact() {
   return (
     <>
+      <BreadcrumbLd trail={[{ name: "Contact", path: "/contact" }]} />
       {/* Hero */}
       <section className="hero-navy relative overflow-hidden">
         <div className="index-field absolute inset-0" aria-hidden="true" />

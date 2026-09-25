@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import Reveal from "@/components/Reveal";
 import { SITE } from "@/lib/site";
+import BreadcrumbLd from "@/components/BreadcrumbLd";
 
 export const metadata = {
   title: "Hospice Compliance & Demo FAQ",
@@ -129,6 +130,7 @@ export default function FaqPage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
+      <BreadcrumbLd trail={[{ name: "FAQ", path: "/faq" }]} />
 
       {/* Hero */}
       <section className="hero-navy relative overflow-hidden">

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Database, Lock, KeyRound, EyeOff, ShieldCheck, Ban, X, ArrowRight } from "lucide-react";
 import Reveal from "@/components/Reveal";
 import { SITE } from "@/lib/site";
+import BreadcrumbLd from "@/components/BreadcrumbLd";
 
 export const metadata = {
   title: "Security: Zero PHI, Nothing to Breach",
@@ -55,6 +56,7 @@ const NOT_COLLECTED = [
 export default function Security() {
   return (
     <>
+      <BreadcrumbLd trail={[{ name: "Security", path: "/security" }]} />
       {/* Hero */}
       <section className="hero-navy relative overflow-hidden">
         <div className="index-field absolute inset-0" aria-hidden="true" />

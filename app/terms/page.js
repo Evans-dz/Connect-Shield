@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SITE } from "@/lib/site";
+import BreadcrumbLd from "@/components/BreadcrumbLd";
 
 export const metadata = {
   title: "Terms of Service",
@@ -38,6 +39,7 @@ function Bullets({ items }) {
 export default function Terms() {
   return (
     <>
+      <BreadcrumbLd trail={[{ name: "Terms of Service", path: "/terms" }]} />
       {/* Hero */}
       <section className="hero-navy relative overflow-hidden">
         <div className="index-field absolute inset-0" aria-hidden="true" />

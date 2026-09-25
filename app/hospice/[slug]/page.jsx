@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 import { SITE } from '@/lib/site'
 import { stateName } from '@/lib/states'
+import { fitTitle } from '@/lib/title'
 import NearbyHospices from '@/components/hospice/NearbyHospices'
 import AgencyFAQ from '@/components/hospice/AgencyFAQ'
 
@@ -96,7 +97,11 @@ export async function generateMetadata({ params }) {
   const description = `Published CMS data for ${a.hospice_name}${where ? ` in ${where}` : ''}: FY2025 SSVI score ${a.fy2025_total_ssvi}/16, all nine measures${stateFull ? `, ${stateFull} rank` : ''}. Free, no signup.`
   const url = `${SITE.url}/hospice/${a.slug}`
   return {
-    title,
+    title: fitTitle(
+      title,
+      `${a.hospice_name}${where ? ` (${where})` : ''}: SSVI Score ${a.fy2025_total_ssvi}/16`,
+      `${a.hospice_name}: SSVI Score ${a.fy2025_total_ssvi}/16`
+    ),
     description,
     alternates: { canonical: url },
     openGraph: { title, description, url },

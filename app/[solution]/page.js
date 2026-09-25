@@ -5,6 +5,8 @@ import Reveal from "@/components/Reveal";
 import CCNTeaser from "@/components/CCNTeaser";
 import { SITE } from "@/lib/site";
 import { SOLUTIONS, SOLUTION_SLUGS, getSolution } from "@/lib/solutions";
+import { fitTitle } from "@/lib/title";
+import BreadcrumbLd from "@/components/BreadcrumbLd";
 
 export const dynamicParams = false;
 
@@ -17,7 +19,7 @@ export function generateMetadata({ params }) {
   if (!s) return {};
   const url = `${SITE.url}/${s.slug}`;
   return {
-    title: s.metaTitle,
+    title: fitTitle(s.metaTitle),
     description: s.metaDescription,
     keywords: s.keywords,
     alternates: { canonical: url },
@@ -59,6 +61,7 @@ export default function SolutionPage({ params }) {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
+      <BreadcrumbLd trail={[{ name: s.nav, path: `/${s.slug}` }]} />
 
       {/* Hero */}
       <section className="hero-navy relative overflow-hidden">

@@ -2,6 +2,7 @@ import { Check } from "lucide-react";
 import Reveal from "@/components/Reveal";
 import DemoForm from "@/components/DemoForm";
 import { SITE } from "@/lib/site";
+import BreadcrumbLd from "@/components/BreadcrumbLd";
 
 export const metadata = {
   title: "Book a Demo: Hospice Compliance Intelligence",
@@ -39,6 +40,7 @@ export default function Demo({ searchParams }) {
 
   return (
     <>
+      <BreadcrumbLd trail={[{ name: "Book a demo", path: "/demo" }]} />
       <section className="hero-navy relative overflow-hidden">
         <div className="index-field absolute inset-0" aria-hidden="true" />
         <div className="max-w-content mx-auto px-5 md:px-8 pt-16 md:pt-24 pb-20 md:pb-28 relative">

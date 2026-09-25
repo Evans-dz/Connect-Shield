@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SITE } from "@/lib/site";
+import BreadcrumbLd from "@/components/BreadcrumbLd";
 
 export const metadata = {
   title: "Privacy Policy",
@@ -39,6 +40,7 @@ function Bullets({ items }) {
 export default function Privacy() {
   return (
     <>
+      <BreadcrumbLd trail={[{ name: "Privacy Policy", path: "/privacy" }]} />
       {/* Hero */}
       <section className="hero-navy relative overflow-hidden">
         <div className="index-field absolute inset-0" aria-hidden="true" />

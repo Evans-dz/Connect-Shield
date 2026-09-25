@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 import { SITE } from '@/lib/site'
 import SSVIMap from '@/components/SSVIMap'
+import { fitTitle } from '@/lib/title'
+import BreadcrumbLd from '@/components/BreadcrumbLd'
 
 const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -11,8 +13,7 @@ const db = createClient(
 export const revalidate = 86400
 
 export const metadata = {
-  title:
-    'Hospice SSVI Scores by State: Analysis of All 6,643 Medicare-Certified Agencies',
+  title: fitTitle('Hospice SSVI Scores by State: All 6,643 Agencies Analyzed'),
   description:
     'The CMS Service and Spending Variation Index is mostly a spending index. An analysis of FY2025 SSVI scores for every Medicare-certified hospice in the United States, ranked by state.',
   alternates: { canonical: `${SITE.url}/hospice/ssvi-by-state` },
@@ -22,6 +23,8 @@ export const metadata = {
     description:
       'Two-thirds of the average hospice SSVI score comes from non-hospice spending, not utilization. An analysis of all 6,643 scored agencies.',
     url: `${SITE.url}/hospice/ssvi-by-state`,
+    // Restated: a page-level openGraph replaces the root one, image included.
+    images: [{ url: '/opengraph-image', width: 1200, height: 630, alt: 'Connect Shield | Hospice Compliance Intelligence' }],
   },
 }
 
@@ -246,6 +249,12 @@ export default async function Page() {
 
   return (
     <div className="bg-slate-50">
+      <BreadcrumbLd
+        trail={[
+          { name: 'Hospice SSVI Scores', path: '/hospice' },
+          { name: 'SSVI by State', path: '/hospice/ssvi-by-state' },
+        ]}
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

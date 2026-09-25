@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import { SITE } from '@/lib/site'
 import { stateName } from '@/lib/states'
 import SSVILookup from '@/components/SSVILookup'
+import { fitTitle } from '@/lib/title'
+import BreadcrumbLd from '@/components/BreadcrumbLd'
 
 const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -12,7 +14,7 @@ const db = createClient(
 export const revalidate = 86400
 
 export const metadata = {
-  title: 'Hospice SSVI Scores: Every Medicare-Certified Agency',
+  title: fitTitle('Hospice SSVI Scores: Every Medicare-Certified Agency'),
   description:
     'Look up the CMS Service and Spending Variation Index (SSVI) score for any Medicare-certified hospice. FY2025 and FY2024 scores for 6,643 agencies, free and no signup.',
   alternates: { canonical: `${SITE.url}/hospice` },
@@ -71,6 +73,7 @@ export default async function Page() {
 
   return (
     <div className="bg-slate-50">
+      <BreadcrumbLd trail={[{ name: 'Hospice SSVI Scores', path: '/hospice' }]} />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(datasetLd) }}

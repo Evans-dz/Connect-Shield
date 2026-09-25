@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 import { SITE } from '@/lib/site'
 import { stateName } from '@/lib/states'
+import { fitTitle } from '@/lib/title'
 
 const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -65,7 +66,10 @@ export async function generateMetadata({ params }) {
       } in ${name}: FY2025 SSVI scores, spending and utilization measures, ranked. Free CMS data, no signup.`
     : `Every Medicare-certified hospice agency in ${name}: FY2025 SSVI scores, spending and utilization measures, ranked. Free CMS data, no signup.`
   return {
-    title: `${name} Hospice Agencies: SSVI Scores & CMS Data`,
+    title: fitTitle(
+      `${name} Hospice Agencies: SSVI Scores & CMS Data`,
+      `${name} Hospice Agencies: SSVI Scores`
+    ),
     description,
     alternates: {
       canonical: `${SITE.url}/hospice/state/${params.code.toLowerCase()}`,

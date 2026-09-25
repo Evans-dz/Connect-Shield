@@ -3,13 +3,15 @@ import { ArrowRight, Clock, ExternalLink } from "lucide-react";
 import Reveal from "@/components/Reveal";
 import { SITE } from "@/lib/site";
 import { supabasePublic, supabaseService } from "@/lib/supabase";
+import { fitTitle } from "@/lib/title";
+import BreadcrumbLd from "@/components/BreadcrumbLd";
 
 // Public, indexable mirror of the dashboard's Regulatory Watch feed.
 // Re-renders hourly so newly published updates appear without a redeploy.
 export const revalidate = 3600;
 
 export const metadata = {
-  title: "Hospice Regulatory Watch: CMS Rules, Tracked & Explained",
+  title: fitTitle("Hospice Regulatory Watch: CMS Rules, Tracked & Explained"),
   description:
     "Hospice regulatory updates, tracked: every CMS hospice rule from the Federal Register, reviewed by a human and explained in plain language, including the FY2027 final rule, PEPPER's return, and HOPE deadlines.",
   alternates: { canonical: `${SITE.url}/regulatory-watch` },
@@ -135,6 +137,7 @@ export default async function RegulatoryWatchPage() {
 
   return (
     <>
+      <BreadcrumbLd trail={[{ name: "Regulatory Watch", path: "/regulatory-watch" }]} />
       {/* Hero */}
       <section className="hero-navy relative overflow-hidden">
         <div className="index-field absolute inset-0" aria-hidden="true" />
