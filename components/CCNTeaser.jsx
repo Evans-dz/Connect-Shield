@@ -36,7 +36,8 @@ function Stat({ value, max, label, tone, sub }) {
   );
 }
 
-export default function CCNTeaser() {
+// headingAs: the card's heading level, so it nests under whatever section holds it.
+export default function CCNTeaser({ headingAs: Heading = "h3" }) {
   const [ccn, setCcn] = useState("");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
@@ -51,7 +52,7 @@ export default function CCNTeaser() {
     try {
       const res = await fetch(`/api/ssvi-lookup?ccn=${encodeURIComponent(clean)}`);
       if (res.status === 404) {
-        setError(`No CMS SSVI record found for "${clean}". Check the CCN and try again — it's on your PS&R report next to your provider name.`);
+        setError(`No CMS SSVI record found for "${clean}". Check the CCN and try again. It's on your PS&R report next to your provider name.`);
       } else if (!res.ok) {
         setError("Something went wrong. Try again in a moment.");
       } else {
@@ -81,9 +82,9 @@ export default function CCNTeaser() {
     <div className="rounded-2xl overflow-hidden" style={{ background: "#14213D", border: "1px solid #243354" }}>
       <div className="p-6 md:p-8">
         <div className="eyebrow" style={{ color: "#E8CFA0" }}>Free · No signup · All 6,643 scored US hospices</div>
-        <h3 className="font-display text-2xl md:text-[26px] text-white mt-3">Look up your hospice's SSVI score</h3>
+        <Heading className="font-display text-2xl md:text-[26px] text-white mt-3">Look up your hospice's SSVI score</Heading>
         <p className="text-sm mt-2 max-w-md" style={{ color: "#93A0B8" }}>
-          Enter your CCN to see your published CMS score, your full eight-measure breakdown, and how you rank nationally — free.
+          Enter your CCN to see your published CMS score, your full eight-measure breakdown, and how you rank nationally. It's free.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-2 mt-5">
@@ -97,6 +98,8 @@ export default function CCNTeaser() {
               className="w-full rounded-xl pl-10 pr-4 py-3 text-sm font-mono text-white placeholder:text-slate-mute focus:outline-none"
               style={{ background: "#0E1830", border: "1px solid #243354" }}
               aria-label="CMS Certification Number"
+              autoComplete="off"
+              spellCheck={false}
             />
           </div>
           <button
@@ -153,7 +156,7 @@ export default function CCNTeaser() {
               </div>
               <Link
                 href={`/hospice/ccn/${encodeURIComponent(data.ccn)}`}
-                className="inline-flex items-center gap-1.5 text-sm mt-4 font-medium"
+                className="inline-flex items-center gap-1.5 text-sm mt-2 min-h-[44px] font-medium"
                 style={{ color: "#E8CFA0" }}
               >
                 View full FY2025 breakdown
@@ -207,7 +210,7 @@ export default function CCNTeaser() {
 
               {percentile !== null && (
                 <div className="mt-4 pt-4 text-xs" style={{ borderTop: "1px solid #243354", color: "#93A0B8" }}>
-                  Scores higher than <span className="font-mono" style={{ color: "#E8CFA0" }}>{percentile}%</span> of scored US hospices. The SSVI is not a quality rating — it measures divergence from peer norms.
+                  Scores higher than <span className="font-mono" style={{ color: "#E8CFA0" }}>{percentile}%</span> of scored US hospices. The SSVI is not a quality rating; it measures divergence from peer norms.
                 </div>
               )}
             </div>
@@ -225,17 +228,17 @@ export default function CCNTeaser() {
                 </div>
                 <div className="text-xs mt-2 leading-relaxed" style={{ color: "#93A0B8" }}>
                   CMS publishes the flags, not your underlying numbers. Connect Shield reads
-                  your own PS&amp;R, PEPPER, CAHPS, and QAPI reports against your SSVI — showing
+                  your own PS&amp;R, PEPPER, CAHPS, and QAPI reports against your SSVI to show
                   your actual values, how far each sits from the threshold, what to fix first,
                   and how your score moves as you fix it.
                 </div>
                 <div className="flex flex-wrap gap-2 mt-4">
-                  <Link href="/demo" className="px-4 py-2 rounded-lg text-sm font-medium" style={{ background: "#B8863F", color: "#0E1830" }}>
+                  <Link href="/demo" className="px-4 py-3 rounded-lg text-sm font-medium" style={{ background: "#B8863F", color: "#0E1830" }}>
                     Book a demo
                   </Link>
                   <Link
                     href={`/hospice/ccn/${encodeURIComponent(data.ccn)}`}
-                    className="px-4 py-2 rounded-lg text-sm font-medium"
+                    className="px-4 py-3 rounded-lg text-sm font-medium"
                     style={{ border: "1px solid #243354", color: "#93A0B8" }}
                   >
                     See the free breakdown

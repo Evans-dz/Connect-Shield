@@ -11,7 +11,7 @@ const PLATFORM = [
   { icon: PieChart, title: "CAP exposure", body: "Turn your beneficiary count into a live aggregate-cap calculation with a clawback estimate." },
   { icon: FileText, title: "PEPPER & CAHPS", body: "Read your outlier target areas and survey scores against national thresholds, in plain terms." },
   { icon: BookOpen, title: "Survey & CoP auditor", body: "Track deficiencies and audit charts against the Medicare Conditions of Participation." },
-  { icon: Bot, title: "Atlas assistant", body: "Ask your compliance data anything — SSVI, CAP, RN intensity — and get precise answers." },
+  { icon: Bot, title: "Atlas assistant", body: "Ask your compliance data anything (SSVI, CAP, RN intensity) and get precise answers." },
 ];
 
 export default function Home() {
@@ -37,10 +37,10 @@ export default function Home() {
             <div>
               <div className="eyebrow animate-fade-up" style={{ color: "#E8CFA0" }}>Hospice Compliance Intelligence</div>
               <h1 className="font-display text-white mt-4 animate-fade-up" style={{ fontSize: "clamp(2.4rem, 5vw, 3.6rem)", lineHeight: 1.05, animationDelay: "60ms" }}>
-                CMS is scoring your hospice - Do you know your number?
+                CMS is scoring your hospice. Do you know your number?
               </h1>
               <p className="text-base md:text-lg mt-5 max-w-lg animate-fade-up" style={{ color: "#AEBAD0", animationDelay: "120ms" }}>
-                CMS now scores every hospice from 0 to 16 on nine claims-based metrics — eight utilization measures plus non-hospice spending. Connect Shield shows you your number, reads your own reports alongside it, and tells you exactly what to fix — securely, on encrypted, per-clinic isolated infrastructure.
+                CMS now scores every hospice from 0 to 16 on nine claims-based metrics: eight utilization measures plus non-hospice spending. Connect Shield shows you your number, reads your own reports alongside it, and tells you exactly what to fix. Everything runs on encrypted infrastructure, isolated per clinic.
               </p>
               <div className="flex flex-wrap gap-3 mt-7 animate-fade-up" style={{ animationDelay: "180ms" }}>
                 <Link href="/demo" className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-medium" style={{ background: "#B8863F", color: "#0E1830" }}>
@@ -51,7 +51,7 @@ export default function Home() {
                 </a>
               </div>
               <div className="mt-6 text-[12px] font-mono animate-fade-up" style={{ color: "#E8CFA0", animationDelay: "210ms" }}>
-                SSVI finalized July 30, 2026 · Effective October 1, 2026 — one month out
+                SSVI finalized July 30, 2026 · Effective October 1, 2026
               </div>
               <div className="flex items-center gap-2 mt-3 text-[12px] font-mono animate-fade-up" style={{ color: "#7C8AA8", animationDelay: "240ms" }}>
                 <ShieldCheck size={14} color="#B8863F" /> Zero PHI stored · Encrypted · Built with a 20-year hospice owner-operator
@@ -59,7 +59,7 @@ export default function Home() {
             </div>
 
             <div id="lookup" className="animate-fade-up" style={{ animationDelay: "160ms" }}>
-              <CCNTeaser />
+              <CCNTeaser headingAs="h2" />
             </div>
           </div>
         </div>
@@ -87,7 +87,7 @@ export default function Home() {
             Every report CMS scores you on, read in one place.
           </h2>
           <p className="text-slate mt-4 max-w-xl">
-            Other tools stop at a lookup. Connect Shield reads your PS&R, beneficiary count, PEPPER, and CAHPS alongside the published CMS data — then turns it into a to-do list your leadership can act on.
+            Other tools stop at a lookup. Connect Shield reads your PS&R, beneficiary count, PEPPER, and CAHPS alongside the published CMS data, then turns it into a to-do list your leadership can act on.
           </p>
         </Reveal>
 
@@ -118,10 +118,10 @@ export default function Home() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Link href="/hospice" className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium" style={{ background: "#B8863F", color: "#0E1830" }}>
+                <Link href="/hospice" className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium" style={{ background: "#B8863F", color: "#0E1830" }}>
                   Browse all agencies <ArrowRight size={15} />
                 </Link>
-                <Link href="/hospice/ssvi-by-state" className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-ink" style={{ border: "1px solid #E3E7ED" }}>
+                <Link href="/hospice/ssvi-by-state" className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-ink" style={{ border: "1px solid #E3E7ED" }}>
                   Read our state analysis
                 </Link>
               </div>
@@ -200,7 +200,7 @@ export default function Home() {
         <div className="max-w-content mx-auto px-5 md:px-8 py-16">
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { icon: ShieldCheck, h: "Secure by design", p: "Connect Shield works from CMS agency-level data and the reports you upload — never patient names or diagnoses. Your data is encrypted in transit and at rest." },
+              { icon: ShieldCheck, h: "Secure by design", p: "Connect Shield works from CMS agency-level data and the reports you upload, never patient names or diagnoses. Your data is encrypted in transit and at rest." },
               { icon: Lock, h: "Secure per-clinic access", p: "Each hospice gets its own portal with hashed credentials, encrypted sessions, and multi-factor authentication support." },
               { icon: Check, h: "Sourced straight from CMS", p: "SSVI figures come directly from the published CMS SSVI file. Every measure we show reconciles to your published score." },
             ].map((c, i) => {

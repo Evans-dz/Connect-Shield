@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { supabasePublic, riskFromScore } from "@/lib/supabase";
 
 export const runtime = "nodejs";
-export const alt = "Hospice SSVI score card — Connect Shield";
+export const alt = "Hospice SSVI score card from Connect Shield";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 

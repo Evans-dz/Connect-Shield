@@ -1,0 +1,38 @@
+# Connect Shield
+
+> Connect Shield is hospice compliance software from Connect Shield LLC in St. George, Utah. It turns published CMS data into a compliance picture for hospice leadership: the agency's published SSVI score, PEPPER outliers, CAP exposure, CAHPS results and survey readiness, in one encrypted dashboard with an isolated portal per clinic. It stores zero PHI. Anyone can look up the published SSVI score of any of the 6,643 scored US hospices free, with no signup. Accounts are set up after a 20-minute demo with a founder.
+
+Contact: admin@connect-shield.com · (435) 224-6987 · https://connect-shield.com/contact
+Address: Connect Shield LLC, 923 S River Rd, St George, UT 84790
+Serves: Medicare-certified hospice agencies across the United States.
+Founders: Zac Evans, with Justin Larsen (hospice owner-operator for 20 years, Certified Hospice Administrator).
+
+Connect Shield is not affiliated with CMS. SSVI figures are reproduced from the CMS FY2027 hospice final rule (CMS-1851-F, effective October 1, 2026). CMS states the SSVI is not a determination of fraud, waste, or abuse.
+
+## Solutions
+
+- [SSVI score lookup](https://connect-shield.com/ssvi): the published FY2025 CMS Service and Spending Variation Index score (0 to 16) and all nine measures.
+- [PEPPER analysis](https://connect-shield.com/pepper): outlier target areas from the hospice PEPPER report against national percentiles.
+- [CAHPS tracking](https://connect-shield.com/cahps): CAHPS Hospice Survey scores against the national average, with trends.
+- [QAPI management](https://connect-shield.com/qapi): quality assessment and performance improvement projects aimed at the measures that flag.
+- [PS&R summary](https://connect-shield.com/psr-summary): Report 810 read for RN visit intensity, length of stay and reimbursement.
+- [Beneficiary count and CAP](https://connect-shield.com/beneficiary-count): Medicare aggregate cap exposure and clawback estimate.
+- [Survey results](https://connect-shield.com/survey-results): survey results, CMS-2567 statements and plans of correction in one dated library.
+- [Policy manuals](https://connect-shield.com/policy-manuals): policy and procedure manuals in one searchable library.
+- [Chart audit](https://connect-shield.com/chart-audit): plain-English chart breakdowns and a survey-readiness review. Documents are analyzed in memory and not stored.
+
+## Free public data
+
+- [Hospice SSVI directory](https://connect-shield.com/hospice): a page for every scored Medicare-certified hospice, by state.
+- [SSVI by state analysis](https://connect-shield.com/hospice/ssvi-by-state): how the 6,643 scores break down across states.
+- [Regulatory Watch](https://connect-shield.com/regulatory-watch): CMS hospice rules from the Federal Register, reviewed and explained in plain language.
+
+## Company
+
+- [Pricing](https://connect-shield.com/pricing): three plans priced by number of agencies and users; every plan includes every tool. 12-month subscriptions.
+- [Book a demo](https://connect-shield.com/demo)
+- [About](https://connect-shield.com/about)
+- [FAQ](https://connect-shield.com/faq)
+- [Security](https://connect-shield.com/security): zero PHI, encryption in transit and at rest, per-clinic isolation.
+- [Privacy policy](https://connect-shield.com/privacy)
+- [Terms of service](https://connect-shield.com/terms)

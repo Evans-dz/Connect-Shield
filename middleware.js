@@ -10,6 +10,6 @@ export const config = {
   matcher: [
     // All paths except Next internals, static image files, and the public
     // SSVI lookup pages (no auth needed — skipping avoids a Supabase call per hit)
-    "/((?!_next/static|_next/image|favicon.ico|hospice|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|hospice|sitemap.xml|robots.txt|llms.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

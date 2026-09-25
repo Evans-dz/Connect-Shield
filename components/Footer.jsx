@@ -16,16 +16,16 @@ export default function Footer() {
               <span className="font-display text-lg text-white">{SITE.name}</span>
             </div>
             <p className="text-sm mt-4 max-w-xs" style={{ color: "#93A0B8" }}>
-              Confidence starts with visibility. Built on your published CMS data — zero PHI stored, encrypted throughout.
+              Confidence starts with visibility. Built on your published CMS data. Zero PHI stored, encrypted throughout.
             </p>
           </div>
 
           <div>
             <div className="eyebrow mb-4">Solutions</div>
-            <ul className="space-y-2.5">
+            <ul className="md:space-y-1.5">
               {SOLUTIONS.slice(0, 4).map((s) => (
                 <li key={s.slug}>
-                  <Link href={`/${s.slug}`} className="text-sm hover:text-white transition-colors" style={{ color: "#93A0B8" }}>
+                  <Link href={`/${s.slug}`} className="inline-flex items-center min-h-[44px] md:min-h-[28px] text-sm hover:text-white transition-colors" style={{ color: "#93A0B8" }}>
                     {s.nav}
                   </Link>
                 </li>
@@ -35,10 +35,10 @@ export default function Footer() {
 
           <div>
             <div className="eyebrow mb-4">More</div>
-            <ul className="space-y-2.5">
+            <ul className="md:space-y-1.5">
               {SOLUTIONS.slice(4).map((s) => (
                 <li key={s.slug}>
-                  <Link href={`/${s.slug}`} className="text-sm hover:text-white transition-colors" style={{ color: "#93A0B8" }}>
+                  <Link href={`/${s.slug}`} className="inline-flex items-center min-h-[44px] md:min-h-[28px] text-sm hover:text-white transition-colors" style={{ color: "#93A0B8" }}>
                     {s.nav}
                   </Link>
                 </li>
@@ -48,17 +48,17 @@ export default function Footer() {
 
           <div>
             <div className="eyebrow mb-4">Company</div>
-            <ul className="space-y-2.5">
-              <li><Link href="/pricing" className="text-sm hover:text-white transition-colors" style={{ color: "#93A0B8" }}>Pricing</Link></li>
-              <li><Link href="/demo" className="text-sm hover:text-white transition-colors" style={{ color: "#93A0B8" }}>Book a demo</Link></li>
-              <li><a href={SITE.appUrl} className="text-sm hover:text-white transition-colors" style={{ color: "#93A0B8" }}>Sign in</a></li>
-              <li><a href={`mailto:${SITE.email}`} className="text-sm hover:text-white transition-colors" style={{ color: "#93A0B8" }}>{SITE.email}</a></li>
+            <ul className="md:space-y-1.5">
+              <li><Link href="/pricing" className="inline-flex items-center min-h-[44px] md:min-h-[28px] text-sm hover:text-white transition-colors" style={{ color: "#93A0B8" }}>Pricing</Link></li>
+              <li><Link href="/demo" className="inline-flex items-center min-h-[44px] md:min-h-[28px] text-sm hover:text-white transition-colors" style={{ color: "#93A0B8" }}>Book a demo</Link></li>
+              <li><a href={SITE.appUrl} className="inline-flex items-center min-h-[44px] md:min-h-[28px] text-sm hover:text-white transition-colors" style={{ color: "#93A0B8" }}>Sign in</a></li>
+              <li><a href={`mailto:${SITE.email}`} className="inline-flex items-center min-h-[44px] md:min-h-[28px] text-sm hover:text-white transition-colors" style={{ color: "#93A0B8" }}>{SITE.email}</a></li>
             </ul>
           </div>
         </div>
 
         {/* Legal & trust row */}
-        <div className="mt-12 pt-6 flex flex-wrap items-center gap-x-6 gap-y-2" style={{ borderTop: "1px solid #243354" }}>
+        <div className="mt-12 pt-6 grid grid-cols-2 md:flex md:flex-wrap md:items-center md:gap-x-6 md:gap-y-2" style={{ borderTop: "1px solid #243354" }}>
           {[
             { label: "About", href: "/about" },
             { label: "FAQ", href: "/faq" },
@@ -68,7 +68,7 @@ export default function Footer() {
             { label: "Terms", href: "/terms" },
             { label: "Contact", href: "/contact" },
           ].map((l) => (
-            <Link key={l.href} href={l.href} className="text-[12px] font-mono hover:text-white transition-colors" style={{ color: "#93A0B8" }}>
+            <Link key={l.href} href={l.href} className="flex items-center min-h-[44px] md:min-h-[28px] md:px-1.5 md:-mx-1.5 text-[12px] font-mono hover:text-white transition-colors" style={{ color: "#93A0B8" }}>
               {l.label}
             </Link>
           ))}

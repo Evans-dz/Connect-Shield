@@ -348,7 +348,7 @@ export default function SSVIMap({ states }) {
                 >
                   <span className="font-semibold">{s.code}</span>{' '}
                   <span className="opacity-85">
-                    {s.avg == null ? '—' : s.avg.toFixed(1)}
+                    {s.avg == null ? 'n/a' : s.avg.toFixed(1)}
                   </span>
                 </button>
               ))}

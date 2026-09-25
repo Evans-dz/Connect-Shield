@@ -13,8 +13,8 @@ const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500", "600"], 
 export const metadata = {
   metadataBase: new URL(SITE.url),
   title: {
-    default: "Connect Shield — Hospice Compliance Intelligence & SSVI Score Lookup",
-    template: "%s — Connect Shield",
+    default: "Connect Shield | Hospice Compliance & SSVI Score Lookup",
+    template: "%s | Connect Shield",
   },
   description: SITE.description,
   keywords: [
@@ -25,7 +25,7 @@ export const metadata = {
   openGraph: {
     type: "website",
     siteName: SITE.name,
-    title: "Connect Shield — Hospice Compliance Intelligence",
+    title: "Connect Shield | Hospice Compliance Intelligence",
     description: SITE.description,
     url: SITE.url,
   },
@@ -60,9 +60,10 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${inter.variable} ${mono.variable}`}>
       <body className="font-sans antialiased">
+        <a href="#main" className="skip-link">Skip to main content</a>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }} />
         <Nav />
-        <main>{children}</main>
+        <main id="main" tabIndex={-1}>{children}</main>
         <Footer />
         <Analytics />
         <Script

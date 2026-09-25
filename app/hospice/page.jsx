@@ -12,7 +12,7 @@ const db = createClient(
 export const revalidate = 86400
 
 export const metadata = {
-  title: 'Hospice SSVI Scores — Every Medicare-Certified Agency',
+  title: 'Hospice SSVI Scores: Every Medicare-Certified Agency',
   description:
     'Look up the CMS Service and Spending Variation Index (SSVI) score for any Medicare-certified hospice. FY2025 and FY2024 scores for 6,643 agencies, free and no signup.',
   alternates: { canonical: `${SITE.url}/hospice` },
@@ -45,12 +45,12 @@ export default async function Page() {
     ? (
         rows.reduce((s, r) => s + Number(r.fy2025_total_ssvi), 0) / rows.length
       ).toFixed(1)
-    : '—'
+    : 'n/a'
 
   const datasetLd = {
     '@context': 'https://schema.org',
     '@type': 'Dataset',
-    name: 'CMS Hospice Service and Spending Variation Index (SSVI) — FY2025 Scores',
+    name: 'CMS Hospice Service and Spending Variation Index (SSVI): FY2025 Scores',
     description:
       'FY2025 Service and Spending Variation Index scores (0–16) for approximately 6,643 Medicare-certified hospices, built from nine claims-based measures: a 0–8 non-hospice spending score and eight utilization measures worth one point each. Published by CMS with the FY2027 hospice final rule (CMS-1851-F).',
     url: `${SITE.url}/hospice`,

@@ -12,7 +12,7 @@ export const revalidate = 86400
 
 export const metadata = {
   title:
-    'Hospice SSVI Scores by State — Analysis of All 6,643 Medicare-Certified Agencies',
+    'Hospice SSVI Scores by State: Analysis of All 6,643 Medicare-Certified Agencies',
   description:
     'The CMS Service and Spending Variation Index is mostly a spending index. An analysis of FY2025 SSVI scores for every Medicare-certified hospice in the United States, ranked by state.',
   alternates: { canonical: `${SITE.url}/hospice/ssvi-by-state` },
@@ -102,7 +102,7 @@ function CompositionCard({ title, note, items, half }) {
 const DATASET_LD = {
   '@context': 'https://schema.org',
   '@type': 'Dataset',
-  name: 'CMS Hospice Service and Spending Variation Index (SSVI) — FY2025 Scores',
+  name: 'CMS Hospice Service and Spending Variation Index (SSVI): FY2025 Scores',
   description:
     'FY2025 Service and Spending Variation Index scores (0–16) for approximately 6,643 Medicare-certified hospices, built from nine claims-based measures: a 0–8 non-hospice spending score and eight utilization measures worth one point each. Published by CMS with the FY2027 hospice final rule (CMS-1851-F).',
   url: `${SITE.url}/hospice/ssvi-by-state`,
@@ -275,7 +275,7 @@ export default async function Page() {
             CMS published a Service and Spending Variation Index score for every
             Medicare-certified hospice in the country. We analyzed all{' '}
             {rows.length.toLocaleString()} of them. Roughly {spendShare}% of the
-            average score comes from a single half of the formula &mdash; and two
+            average score comes from a single half of the formula, and two
             agencies with the same score can be there for opposite reasons.
           </p>
           <p className="mt-4 text-sm text-slate-500">
@@ -326,7 +326,7 @@ export default async function Page() {
             <strong className="font-semibold text-slate-900">
               {spendMaxed.toLocaleString()} agencies
             </strong>{' '}
-            &mdash; {spendMaxedPct}% of everyone scored &mdash; sit at the
+            ({spendMaxedPct}% of everyone scored) sit at the
             maximum 8 on spending.{' '}
             {utilMaxed === 0 ? (
               <>
@@ -375,9 +375,9 @@ export default async function Page() {
           <div className="mt-8 rounded-xl border-l-4 border-amber-600 bg-white p-6 sm:p-7">
             <p className="leading-relaxed text-slate-800">
               Two agencies can post the same SSVI and need completely different
-              responses. One is a non-hospice spending pattern &mdash; what is
+              responses. One is a non-hospice spending pattern: what is
               being billed outside the benefit for its patients. The other is a
-              care-pattern issue &mdash; visit timing, length of stay, live
+              care-pattern issue: visit timing, length of stay, live
               discharge rates. A ranking tells you neither. Only the composition
               does.
             </p>
@@ -406,7 +406,7 @@ export default async function Page() {
             How scores are distributed
           </h2>
           <p className="mt-4 leading-relaxed text-slate-700">
-            Scores cluster in the middle and fall off sharply above 8 &mdash; the
+            Scores cluster in the middle and fall off sharply above 8, the
             point at which an agency has effectively exhausted one half of the
             formula and has to start accumulating points from the other. No
             hospice in the country scored a 16. The highest is {topScore}, held
@@ -449,7 +449,7 @@ export default async function Page() {
             The SSVI is not a fixed label. Between FY2024 and FY2025,{' '}
             {rose.toLocaleString()} hospices saw their score rise,{' '}
             {fell.toLocaleString()} saw it fall, and {same.toLocaleString()}{' '}
-            stayed put &mdash; meaning roughly {movedPct}% of agencies moved in a
+            stayed put, meaning roughly {movedPct}% of agencies moved in a
             single year.
           </p>
           <p className="mt-4 leading-relaxed text-slate-700">

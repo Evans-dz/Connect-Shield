@@ -53,6 +53,31 @@ body {
   background-image: linear-gradient(#e3e7ed, #e3e7ed);
 }
 
+/* Skip link: off-screen until a keyboard user tabs to it */
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -64px;
+  z-index: 100;
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: #b8863f;
+  color: #0e1830;
+  font-size: 14px;
+  font-weight: 500;
+}
+.skip-link:focus {
+  top: 12px;
+}
+main:focus {
+  outline: none;
+}
+
+/* In-page anchors land below the 64px sticky header */
+[id] {
+  scroll-margin-top: 80px;
+}
+
 /* Focus visibility floor */
 a:focus-visible,
 button:focus-visible,

@@ -66,28 +66,28 @@ export default function DemoForm({ initialHospice = "", initialCcn = "", src = "
     <div className="rounded-2xl p-6 md:p-8" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED", boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
       <div className="grid sm:grid-cols-2 gap-3">
         <div>
-          <label className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>Your name *</label>
-          <input className={FIELD + " mt-1.5"} style={FIELD_STYLE} value={form.name} onChange={set("name")} placeholder="Jane Doe" />
+          <label htmlFor="demo-name" className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>Your name *</label>
+          <input id="demo-name" autoComplete="name" className={FIELD + " mt-1.5"} style={FIELD_STYLE} value={form.name} onChange={set("name")} placeholder="Jane Doe" />
         </div>
         <div>
-          <label className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>Work email *</label>
-          <input className={FIELD + " mt-1.5"} style={FIELD_STYLE} value={form.email} onChange={set("email")} placeholder="jane@yourhospice.com" type="email" />
+          <label htmlFor="demo-email" className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>Work email *</label>
+          <input id="demo-email" autoComplete="email" className={FIELD + " mt-1.5"} style={FIELD_STYLE} value={form.email} onChange={set("email")} placeholder="jane@yourhospice.com" type="email" />
         </div>
         <div>
-          <label className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>Hospice name *</label>
-          <input className={FIELD + " mt-1.5"} style={FIELD_STYLE} value={form.hospice} onChange={set("hospice")} placeholder="Evergreen Hospice LLC" />
+          <label htmlFor="demo-hospice" className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>Hospice name *</label>
+          <input id="demo-hospice" autoComplete="organization" className={FIELD + " mt-1.5"} style={FIELD_STYLE} value={form.hospice} onChange={set("hospice")} placeholder="Evergreen Hospice LLC" />
         </div>
         <div>
-          <label className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>CCN (optional)</label>
-          <input className={FIELD + " mt-1.5 font-mono"} style={FIELD_STYLE} value={form.ccn} onChange={set("ccn")} placeholder="123456" />
+          <label htmlFor="demo-ccn" className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>CCN (optional)</label>
+          <input id="demo-ccn" autoComplete="off" spellCheck={false} className={FIELD + " mt-1.5 font-mono"} style={FIELD_STYLE} value={form.ccn} onChange={set("ccn")} placeholder="123456" />
         </div>
         <div className="sm:col-span-2">
-          <label className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>Phone (optional)</label>
-          <input className={FIELD + " mt-1.5"} style={FIELD_STYLE} value={form.phone} onChange={set("phone")} placeholder="(555) 555-5555" />
+          <label htmlFor="demo-phone" className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>Phone (optional)</label>
+          <input id="demo-phone" type="tel" autoComplete="tel" className={FIELD + " mt-1.5"} style={FIELD_STYLE} value={form.phone} onChange={set("phone")} placeholder="(555) 555-5555" />
         </div>
         <div className="sm:col-span-2">
-          <label className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>What's on your mind? (optional)</label>
-          <textarea className={FIELD + " mt-1.5"} style={FIELD_STYLE} rows={4} value={form.message} onChange={set("message")} placeholder="We just got our SSVI score and want to understand it." />
+          <label htmlFor="demo-message" className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>What's on your mind? (optional)</label>
+          <textarea id="demo-message" className={FIELD + " mt-1.5"} style={FIELD_STYLE} rows={4} value={form.message} onChange={set("message")} placeholder="We just got our SSVI score and want to understand it." />
         </div>
       </div>
 

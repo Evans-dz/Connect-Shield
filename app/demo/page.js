@@ -4,9 +4,9 @@ import DemoForm from "@/components/DemoForm";
 import { SITE } from "@/lib/site";
 
 export const metadata = {
-  title: "Book a Demo — Hospice Compliance Intelligence",
+  title: "Book a Demo: Hospice Compliance Intelligence",
   description:
-    "Book a Connect Shield demo — we pull your CCN live on the call and walk your team through your SSVI score and full compliance picture. Zero PHI stored.",
+    "Book a Connect Shield demo. We pull your CCN live on the call and walk your team through your SSVI score and full compliance picture. Zero PHI stored.",
   alternates: { canonical: `${SITE.url}/demo` },
 };
 
@@ -34,8 +34,8 @@ export default function Demo({ searchParams }) {
     ? `Claiming ${agency || "your hospice"}?`
     : "See your whole compliance picture in 20 minutes.";
   const sub = claiming
-    ? "Book the walkthrough — we pull your full breakdown live on the call. Pricing follows the demo."
-    : "Book the demo — we pull your CCN live on the call and show you exactly what CMS sees. Pricing follows the demo.";
+    ? "Book the walkthrough and we pull your full breakdown live on the call. Pricing follows the demo."
+    : "Book the demo and we pull your CCN live on the call to show you exactly what CMS sees. Pricing follows the demo.";
 
   return (
     <>

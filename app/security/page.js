@@ -4,9 +4,9 @@ import Reveal from "@/components/Reveal";
 import { SITE } from "@/lib/site";
 
 export const metadata = {
-  title: "Security — Zero PHI, Nothing to Breach",
+  title: "Security: Zero PHI, Nothing to Breach",
   description:
-    "Connect Shield stores zero PHI. Your compliance analysis is built from data CMS already publishes about your agency — encrypted in transit and at rest, isolated per clinic, role-gated. No patient records, ever.",
+    "Connect Shield stores zero PHI. Your compliance analysis is built from data CMS already publishes about your agency. It is encrypted in transit and at rest, isolated per clinic, and role-gated. No patient records, ever.",
   alternates: { canonical: `${SITE.url}/security` },
 };
 
@@ -15,7 +15,7 @@ const PILLARS = [
   {
     icon: Database,
     title: "Built on published data",
-    body: "SSVI, PEPPER, CAHPS, and PS&R are aggregate, facility-level reports. CMS publishes them about your agency — not about any patient.",
+    body: "SSVI, PEPPER, CAHPS, and PS&R are aggregate, facility-level reports. CMS publishes them about your agency, not about any patient.",
   },
   {
     icon: Lock,
@@ -64,7 +64,7 @@ export default function Security() {
             There is nothing to breach.
           </h1>
           <p className="text-base md:text-lg mt-5 max-w-2xl mx-auto animate-fade-up" style={{ color: "#AEBAD0", animationDelay: "80ms" }}>
-            Connect Shield stores zero PHI. Your analysis is built from data CMS already publishes about your agency — encrypted, isolated per clinic, and role-gated.
+            Connect Shield stores zero PHI. Your analysis is built from data CMS already publishes about your agency, and it is encrypted, isolated per clinic, and role-gated.
           </p>
           <div className="flex items-center justify-center gap-2 mt-6 text-[12px] font-mono animate-fade-up" style={{ color: "#7C8AA8", animationDelay: "140ms" }}>
             0 patient records · TLS 1.2+ in transit · Encrypted at rest · Row-level isolation
@@ -109,7 +109,7 @@ export default function Security() {
                 What we deliberately do NOT collect.
               </h2>
               <p className="text-slate mt-3 max-w-md">
-                The reports the platform reads — SSVI, PEPPER, CAHPS, PS&amp;R — are facility-level by definition. So the product simply has no place to put any of this:
+                The reports the platform reads (SSVI, PEPPER, CAHPS, PS&amp;R) are facility-level by definition. So the product simply has no place to put any of this:
               </p>
               <ul className="mt-7 space-y-3">
                 {NOT_COLLECTED.map((item) => (
@@ -130,11 +130,11 @@ export default function Security() {
                 </span>
                 <h3 className="font-display text-xl text-white mt-4">Planning to send us PHI? Don't.</h3>
                 <p className="text-sm mt-3" style={{ color: "#AEBAD0" }}>
-                  Connect Shield is built to work without patient data, and our terms require that none is uploaded. If a workflow you want seems to need it, talk to us first — there is almost always a facility-level way to get the same answer.
+                  Connect Shield is built to work without patient data, and our terms require that none is uploaded. If a workflow you want seems to need it, talk to us first. There is almost always a facility-level way to get the same answer.
                 </p>
                 <a
                   href={`mailto:${SITE.email}`}
-                  className="inline-flex items-center gap-2 mt-5 text-sm font-medium rounded-lg px-4 py-2"
+                  className="inline-flex items-center gap-2 mt-5 text-sm font-medium rounded-lg px-4 py-3"
                   style={{ background: "#1E2C4E", color: "#E8CFA0" }}
                 >
                   {SITE.email}
@@ -152,7 +152,7 @@ export default function Security() {
       <section className="max-w-content mx-auto px-5 md:px-8 py-16 md:py-20 text-center">
         <Reveal>
           <h2 className="font-display text-ink" style={{ fontSize: "clamp(1.6rem, 3vw, 2.2rem)", lineHeight: 1.1 }}>
-            See the portal — and what it doesn't ask for.
+            See the portal, and what it doesn't ask for.
           </h2>
           <p className="text-slate mt-3 max-w-xl mx-auto">
             20 minutes. Your published SSVI score, your isolation model, and not a single patient field on screen.

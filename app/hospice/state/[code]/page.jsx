@@ -62,10 +62,10 @@ export async function generateMetadata({ params }) {
   const description = count
     ? `${count.toLocaleString()} Medicare-certified hospice ${
         count === 1 ? 'agency' : 'agencies'
-      } in ${name}: FY2025 SSVI scores, spending and utilization measures, ranked. Free CMS data — no signup.`
-    : `Every Medicare-certified hospice agency in ${name}: FY2025 SSVI scores, spending and utilization measures, ranked. Free CMS data — no signup.`
+      } in ${name}: FY2025 SSVI scores, spending and utilization measures, ranked. Free CMS data, no signup.`
+    : `Every Medicare-certified hospice agency in ${name}: FY2025 SSVI scores, spending and utilization measures, ranked. Free CMS data, no signup.`
   return {
-    title: `${name} Hospice Agencies — SSVI Scores & CMS Data`,
+    title: `${name} Hospice Agencies: SSVI Scores & CMS Data`,
     description,
     alternates: {
       canonical: `${SITE.url}/hospice/state/${params.code.toLowerCase()}`,
@@ -197,7 +197,7 @@ export default async function Page({ params }) {
               {delta !== null && (
                 <p>
                   The average {name} hospice scored {stateAvg.toFixed(1)} on the
-                  FY2025 SSVI &mdash;{' '}
+                  FY2025 SSVI,{' '}
                   {Math.abs(delta) < 0.05 ? (
                     <>in line with the national average of{' '}
                       {nationalAvg.toFixed(1)}</>
@@ -218,7 +218,7 @@ export default async function Page({ params }) {
                 <p>
                   Of that score, {spendAvg.toFixed(1)} comes from non-hospice
                   spending and {utilAvg.toFixed(1)} from the eight claims-based
-                  utilization measures &mdash;{' '}
+                  utilization measures, so{' '}
                   {spendAvg > utilAvg
                     ? 'spending drives the state average'
                     : spendAvg < utilAvg
@@ -233,7 +233,7 @@ export default async function Page({ params }) {
                   {name} {highCount === 1 ? 'agency' : 'agencies'} ({highPct}%)
                   scored 10 or higher, the top band of the 0&ndash;16 range
                   {natHighPct !== null
-                    ? ` — nationally, ${natHighPct}% of agencies do`
+                    ? `, compared with ${natHighPct}% of agencies nationally`
                     : ''}
                   .
                 </p>
@@ -276,7 +276,7 @@ export default async function Page({ params }) {
                         </td>
                         <td className="px-5 py-3 text-right tabular-nums text-slate-600">
                           {r.ssvi_change === null || r.ssvi_change === undefined
-                            ? '—'
+                            ? 'n/a'
                             : r.ssvi_change > 0
                             ? `+${r.ssvi_change}`
                             : r.ssvi_change}

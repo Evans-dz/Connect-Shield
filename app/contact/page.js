@@ -4,7 +4,7 @@ import Reveal from "@/components/Reveal";
 import { SITE } from "@/lib/site";
 
 export const metadata = {
-  title: "Contact — Call, Email, or Visit",
+  title: "Contact: Call, Email, or Visit",
   description:
     "Reach Connect Shield LLC in St George, Utah. Main line (435) 224-6987 is answered by the founder; customer service, email, and the office address are all published. 923 S River Rd, St George, UT 84790.",
   alternates: { canonical: `${SITE.url}/contact` },
@@ -80,7 +80,7 @@ export default function Contact() {
                 </span>
                 <div className="text-[11px] font-mono uppercase tracking-wide mt-4" style={{ color: "#8992A3" }}>{r.label}</div>
                 {r.href ? (
-                  <a href={r.href} className="block text-[15px] font-mono text-ink mt-1 underline decoration-1 underline-offset-2 break-all">
+                  <a href={r.href} className="flex items-center min-h-[44px] text-[15px] font-mono text-ink underline decoration-1 underline-offset-2 break-all">
                     {r.value}
                   </a>
                 ) : (
@@ -98,7 +98,7 @@ export default function Contact() {
             <Link href="/about" className="text-ink underline">Meet the full team on the about page</Link>.
           </p>
           <p className="text-[12px] font-mono mt-3" style={{ color: "#8992A3" }}>
-            Please don't email PHI or patient details — <Link href="/security" className="underline">here's why</Link>.
+            Please don't email PHI or patient details (<Link href="/security" className="underline">here's why</Link>).
           </p>
         </Reveal>
       </section>
@@ -113,7 +113,7 @@ export default function Contact() {
                 Registered, addressed, and answerable.
               </h2>
               <p className="text-slate mt-3 max-w-md">
-                Connect Shield LLC is registered in Utah and operates from St. George. No PO box, no answering service — the address and numbers below are the real ones.
+                Connect Shield LLC is registered in Utah and operates from St. George. No PO box, no answering service: the address and numbers below are the real ones.
               </p>
               <div className="rounded-2xl p-6 bg-white mt-7 max-w-md" style={{ border: "1px solid #E3E7ED" }}>
                 <div className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#8992A3" }}>Legal &amp; mailing</div>
@@ -132,11 +132,11 @@ export default function Contact() {
               <div className="rounded-2xl p-7 md:p-8" style={{ background: "#14213D" }}>
                 <h3 className="font-display text-xl text-white">The fastest answer is a demo.</h3>
                 <p className="text-sm mt-3" style={{ color: "#AEBAD0" }}>
-                  20 minutes, your CCN loaded, your published SSVI score on screen. Demos are with a founder — most questions answer themselves once you see your own numbers.
+                  20 minutes, your CCN loaded, your published SSVI score on screen. Demos are with a founder, and most questions answer themselves once you see your own numbers.
                 </p>
                 <Link
                   href="/demo"
-                  className="inline-flex items-center gap-2 mt-5 text-sm font-medium rounded-lg px-5 py-2.5"
+                  className="inline-flex items-center gap-2 mt-5 text-sm font-medium rounded-lg px-5 py-3"
                   style={{ background: "#B8863F", color: "#0E1830" }}
                 >
                   Book a demo <ArrowRight size={15} />

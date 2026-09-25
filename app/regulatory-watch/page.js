@@ -9,9 +9,9 @@ import { supabasePublic, supabaseService } from "@/lib/supabase";
 export const revalidate = 3600;
 
 export const metadata = {
-  title: "Hospice Regulatory Watch — CMS Rules, Tracked & Explained",
+  title: "Hospice Regulatory Watch: CMS Rules, Tracked & Explained",
   description:
-    "Hospice regulatory updates, tracked: every CMS hospice rule from the Federal Register, reviewed by a human and explained in plain language — the FY2027 final rule, PEPPER's return, and HOPE deadlines.",
+    "Hospice regulatory updates, tracked: every CMS hospice rule from the Federal Register, reviewed by a human and explained in plain language, including the FY2027 final rule, PEPPER's return, and HOPE deadlines.",
   alternates: { canonical: `${SITE.url}/regulatory-watch` },
 };
 
@@ -81,7 +81,7 @@ function UpdateCard({ r }) {
         </div>
       )}
       {r.source_url && (
-        <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-mono mt-3" style={{ color: "#B8863F" }}>
+        <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 min-h-[44px] md:min-h-[28px] text-xs font-mono mt-1" style={{ color: "#B8863F" }}>
           View source <ExternalLink size={11} aria-hidden="true" />
         </a>
       )}
@@ -96,7 +96,7 @@ const RULES = [
   {
     tag: "Final rule · effective Oct 1, 2026",
     title: "FY2027 Hospice Wage Index final rule (CMS-1851-F)",
-    body: "Issued July 30, 2026. Beyond the 2.3% payment update and the $36,174.75 aggregate cap amount, this is the rule that finalized the SSVI — CMS now publishes a Service and Spending Variation Index score for every US hospice. Your agency has a number whether you have looked it up or not.",
+    body: "Issued July 30, 2026. Beyond the 2.3% payment update and the $36,174.75 aggregate cap amount, this is the rule that finalized the SSVI. CMS now publishes a Service and Spending Variation Index score for every US hospice. Your agency has a number whether you have looked it up or not.",
     source: {
       href: "https://www.federalregister.gov/documents/2026/08/03/2026-15686/medicare-program-fy-2027-hospice-wage-index-and-payment-rate-update-and-hospice-quality-reporting",
       label: "Federal Register, 91 FR 49118",
@@ -106,7 +106,7 @@ const RULES = [
   {
     tag: "Report · relaunched Jun 2026",
     title: "PEPPER is back after a 2.5-year pause",
-    body: "CMS resumed the hospice Program for Evaluating Payment Patterns Electronic Report in June 2026, ending a pause that began in early 2024. PEPPER benchmarks your billing against national percentiles on the target areas reviewers watch — long lengths of stay and live discharges among them. If nobody has pulled your report since 2023, that is the first move.",
+    body: "CMS resumed the hospice Program for Evaluating Payment Patterns Electronic Report in June 2026, ending a pause that began in early 2024. PEPPER benchmarks your billing against national percentiles on the target areas reviewers watch, including long lengths of stay and live discharges. If nobody has pulled your report since 2023, that is the first move.",
     source: {
       href: "https://pepper.cbrpepper.org/faq.html",
       label: "PEPPER release schedule",
@@ -116,7 +116,7 @@ const RULES = [
   {
     tag: "Deadline · ongoing",
     title: "HOPE's 90% timely-submission threshold",
-    body: "Since October 1, 2025, every required HOPE record — admission, update visits, discharge — must be accepted into iQIES within 30 days, at least 90% of the time. Miss the threshold and the penalty is a 4-percentage-point cut to your annual payment update. This one is not news; it is a standard your agency has to keep hitting every month.",
+    body: "Since October 1, 2025, every required HOPE record (admission, update visits, discharge) must be accepted into iQIES within 30 days, at least 90% of the time. Miss the threshold and the penalty is a 4-percentage-point cut to your annual payment update. This one is not news; it is a standard your agency has to keep hitting every month.",
     source: {
       href: "https://www.cms.gov/files/document/hospice-timeliness-compliance-report-fact-sheet-jan-2026-508c.pdf-0",
       label: "CMS timeliness fact sheet",
@@ -190,7 +190,7 @@ export default async function RegulatoryWatchPage() {
           <Reveal>
             <div className="mt-8 max-w-3xl rounded-2xl p-6" style={{ background: "#FFFFFF", border: "1px solid #E3E7ED" }}>
               <p className="text-sm text-ink">
-                The reviewed feed appears in the client dashboard — each update published there carries a plain-language summary, an impact note, and an action checklist your team can work through.
+                The reviewed feed appears in the client dashboard. Each update published there carries a plain-language summary, an impact note, and an action checklist your team can work through.
               </p>
               <p className="text-[12px] font-mono mt-3" style={{ color: "#8992A3" }}>
                 Published updates surface here as the reviewer clears them.
@@ -209,7 +209,7 @@ export default async function RegulatoryWatchPage() {
               The rules that matter right now.
             </h2>
             <p className="text-slate mt-3 max-w-xl">
-              Three things every hospice leadership team should have on the whiteboard this quarter — each verifiable at the source.
+              Three things every hospice leadership team should have on the whiteboard this quarter, each verifiable at the source.
             </p>
           </Reveal>
           <div className="mt-8 grid lg:grid-cols-3 gap-4 items-stretch">
@@ -221,12 +221,12 @@ export default async function RegulatoryWatchPage() {
                   </div>
                   <h3 className="font-display text-ink text-lg mt-3">{rule.title}</h3>
                   <p className="text-sm mt-2 text-slate flex-1">{rule.body}</p>
-                  <div className="mt-4 flex flex-col gap-2">
-                    <a href={rule.source.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-mono" style={{ color: "#B8863F" }}>
+                  <div className="mt-2 flex flex-col">
+                    <a href={rule.source.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 min-h-[44px] md:min-h-[28px] text-xs font-mono" style={{ color: "#B8863F" }}>
                       {rule.source.label} <ExternalLink size={11} aria-hidden="true" />
                     </a>
                     {rule.link && (
-                      <Link href={rule.link.href} className="inline-flex items-center gap-1.5 text-sm font-medium" style={{ color: "#B8863F" }}>
+                      <Link href={rule.link.href} className="inline-flex items-center gap-1.5 min-h-[44px] md:min-h-[28px] text-sm font-medium" style={{ color: "#B8863F" }}>
                         {rule.link.label} <ArrowRight size={14} aria-hidden="true" />
                       </Link>
                     )}
@@ -236,7 +236,7 @@ export default async function RegulatoryWatchPage() {
             ))}
           </div>
           <p className="text-[12px] font-mono mt-6 max-w-3xl" style={{ color: "#8992A3" }}>
-            Informational only, built from published CMS and Federal Register documents. Not legal advice, and not a compliance determination — decisions about your agency remain yours.
+            Informational only, built from published CMS and Federal Register documents. Not legal advice, and not a compliance determination. Decisions about your agency remain yours.
           </p>
         </div>
       </section>
@@ -248,7 +248,7 @@ export default async function RegulatoryWatchPage() {
             See Regulatory Watch inside your own dashboard.
           </h2>
           <p className="text-slate mt-3 max-w-xl mx-auto">
-            A 20-minute demo with your CCN loaded — the reviewed feed, the action checklists, and your published SSVI score on one screen.
+            A 20-minute demo with your CCN loaded: the reviewed feed, the action checklists, and your published SSVI score on one screen.
           </p>
           <Link
             href="/demo"

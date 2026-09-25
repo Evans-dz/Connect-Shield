@@ -6,7 +6,7 @@ import { SITE } from "@/lib/site";
 export const metadata = {
   title: "Hospice Compliance & Demo FAQ",
   description:
-    "Answers to the hospice compliance questions owners actually search — SSVI scores, PEPPER reports, the Medicare aggregate cap, CMS-2567s, CHAP accreditation — plus how a Connect Shield demo works and how pricing is structured.",
+    "Answers to the hospice compliance questions owners actually search (SSVI scores, PEPPER reports, the Medicare aggregate cap, CMS-2567s, CHAP accreditation), plus how a Connect Shield demo works and how pricing is structured.",
   alternates: { canonical: `${SITE.url}/faq` },
 };
 
@@ -17,7 +17,7 @@ export const metadata = {
 const COMPANY_FAQ = [
   {
     q: "What happens on a Connect Shield demo?",
-    a: "It's a 20-minute walkthrough with a founder — never a sales team. We pull your own CCN live, so you're looking at your hospice's published SSVI score and the measures behind it, not a canned dataset. Pricing is shared on the call.",
+    a: "It's a 20-minute walkthrough with a founder, never a sales team. We pull your own CCN live, so you're looking at your hospice's published SSVI score and the measures behind it, not a canned dataset. Pricing is shared on the call.",
     link: { href: "/demo", label: "Book a demo" },
   },
   {
@@ -26,27 +26,27 @@ const COMPANY_FAQ = [
   },
   {
     q: "How is Connect Shield pricing structured?",
-    a: "Pricing is shared on the demo call. Plans run as a 12-month subscription, and every plan includes the full platform — tiers differ by how many agencies and users you have, never by which tools you get.",
+    a: "Pricing is shared on the demo call. Plans run as a 12-month subscription, and every plan includes the full platform. Tiers differ by how many agencies and users you have, never by which tools you get.",
     link: { href: "/pricing", label: "See what every plan includes" },
   },
   {
     q: "Does Connect Shield store patient data?",
-    a: "No. Connect Shield stores zero PHI — the platform works from published, facility-level CMS data and the aggregate reports you upload, never patient names, charts, or diagnoses. There is no patient table in the product.",
+    a: "No. Connect Shield stores zero PHI. The platform works from published, facility-level CMS data and the aggregate reports you upload, never patient names, charts, or diagnoses. There is no patient table in the product.",
     link: { href: "/security", label: "How our security works" },
   },
   {
     q: "Who is behind Connect Shield?",
-    a: "Connect Shield LLC, based in St. George, Utah. It was founded by Zac Evans with Justin Larsen — a hospice owner-operator of 20 years, a Certified Hospice Administrator, and a veteran of 16 CMS and state surveys.",
+    a: "Connect Shield LLC, based in St. George, Utah. It was founded by Zac Evans with Justin Larsen. Justin is a hospice owner-operator of 20 years, a Certified Hospice Administrator, and a veteran of 16 CMS and state surveys.",
     link: { href: "/about", label: "Meet the team" },
   },
   {
     q: "Is the free SSVI lookup really free?",
-    a: "Yes. Every scored US hospice has a public page with its full SSVI breakdown, and looking one up requires no signup. The paid platform starts where the lookup ends — reading your own reports against that score.",
+    a: "Yes. Every scored US hospice has a public page with its full SSVI breakdown, and looking one up requires no signup. The paid platform starts where the lookup ends: reading your own reports against that score.",
     link: { href: "/hospice", label: "Browse all agencies" },
   },
   {
     q: "Can my whole team use Connect Shield?",
-    a: "Yes. Each hospice gets its own isolated portal, and your users are provisioned inside it — every query is scoped to your clinic, so your team sees your data and nobody else's. User counts scale with your plan.",
+    a: "Yes. Each hospice gets its own isolated portal, and your users are provisioned inside it. Every query is scoped to your clinic, so your team sees your data and nobody else's. User counts scale with your plan.",
   },
 ];
 
@@ -58,16 +58,16 @@ const COMPLIANCE_FAQ = [
   },
   {
     q: "What is a good SSVI score?",
-    a: "Lower is better. Across the 6,643 scored US hospices, the national average is 6.42 and the median is 7, so a score at or below 7 sits with the majority of the field. Scores of 10 or higher — about 12.5% of hospices — are the range most likely to draw program-integrity attention.",
+    a: "Lower is better. Across the 6,643 scored US hospices, the national average is 6.42 and the median is 7, so a score at or below 7 sits with the majority of the field. Scores of 10 or higher (about 12.5% of hospices) are the range most likely to draw program-integrity attention.",
     link: { href: "/ssvi", label: "See all nine measures explained" },
   },
   {
     q: "Is a high SSVI score a violation?",
-    a: "No. CMS is explicit that the SSVI is not a determination of fraud, waste, or abuse. A high score means your claims patterns diverge from peer norms, which makes review more likely — treat it as a reason to understand which measures flagged you, not as a finding against your agency.",
+    a: "No. CMS is explicit that the SSVI is not a determination of fraud, waste, or abuse. A high score means your claims patterns diverge from peer norms, which makes review more likely. Treat it as a reason to understand which measures flagged you, not as a finding against your agency.",
   },
   {
     q: "What is a PEPPER report?",
-    a: "The Program for Evaluating Payment Patterns Electronic Report compares your hospice's billing against national percentiles across target areas known to attract audit attention — long lengths of stay and live discharges among them. Sitting above the 80th percentile on a target area doesn't prove anything is wrong, but it does put you on the map for review. PEPPER relaunched in June 2026 after a 2.5-year pause, so fresh reports are landing again.",
+    a: "The Program for Evaluating Payment Patterns Electronic Report compares your hospice's billing against national percentiles across target areas known to attract audit attention, including long lengths of stay and live discharges. Sitting above the 80th percentile on a target area doesn't prove anything is wrong, but it does put you on the map for review. PEPPER relaunched in June 2026 after a 2.5-year pause, so fresh reports are landing again.",
     link: { href: "/pepper", label: "Read your PEPPER report" },
   },
   {
@@ -77,22 +77,22 @@ const COMPLIANCE_FAQ = [
   },
   {
     q: "What happens if we exceed the CAP?",
-    a: "You repay the difference. Payments above the cap are treated as an overpayment, and your Medicare Administrative Contractor issues a repayment demand — often months after the cap year closes. Running the calculation during the year, while admissions and census can still be managed, is how agencies see it coming.",
+    a: "You repay the difference. Payments above the cap are treated as an overpayment, and your Medicare Administrative Contractor issues a repayment demand, often months after the cap year closes. Running the calculation during the year, while admissions and census can still be managed, is how agencies see it coming.",
     link: { href: "/beneficiary-count", label: "Run the CAP math" },
   },
   {
     q: "What is a CMS-2567?",
-    a: "Form CMS-2567 is the Statement of Deficiencies — the official document issued after a survey, listing each deficiency found and the requirement it falls under. Your agency responds on the same form with a plan of correction. Condition-level deficiencies are the serious ones: they can put Medicare certification at risk until corrected.",
+    a: "Form CMS-2567 is the Statement of Deficiencies: the official document issued after a survey, listing each deficiency found and the requirement it falls under. Your agency responds on the same form with a plan of correction. Condition-level deficiencies are the serious ones: they can put Medicare certification at risk until corrected.",
     link: { href: "/survey-results", label: "Organize your survey results" },
   },
   {
     q: "What is CHAP accreditation?",
-    a: "CHAP — Community Health Accreditation Partner — is a CMS-approved accrediting organization for hospices. A CHAP-accredited agency is surveyed by CHAP under its deeming authority in place of the state survey agency, against standards that meet or exceed the Medicare Conditions of Participation. Accreditation is voluntary, and it does not exempt an agency from CMS oversight.",
+    a: "CHAP (Community Health Accreditation Partner) is a CMS-approved accrediting organization for hospices. A CHAP-accredited agency is surveyed by CHAP under its deeming authority in place of the state survey agency, against standards that meet or exceed the Medicare Conditions of Participation. Accreditation is voluntary, and it does not exempt an agency from CMS oversight.",
     link: { href: "/survey-results", label: "Track your survey readiness" },
   },
   {
     q: "How often does CMS update hospice compliance data?",
-    a: "On different cycles per dataset. Hospice quality data on Care Compare refreshes quarterly, PEPPER is released annually, and the published SSVI file — FY2024 and FY2025 scores so far — follows the annual rulemaking cycle. Connect Shield loads each new CMS release as it lands.",
+    a: "On different cycles per dataset. Hospice quality data on Care Compare refreshes quarterly, PEPPER is released annually, and the published SSVI file (FY2024 and FY2025 scores so far) follows the annual rulemaking cycle. Connect Shield loads each new CMS release as it lands.",
   },
 ];
 
@@ -186,7 +186,7 @@ export default function FaqPage() {
             </div>
           </Reveal>
           <p className="text-[12px] font-mono mt-6 max-w-3xl" style={{ color: "#8992A3" }}>
-            Everything on this page is informational, built from published CMS data. It is not legal advice, clinical advice, or a compliance determination — decisions about your agency remain yours.
+            Everything on this page is informational, built from published CMS data. It is not legal advice, clinical advice, or a compliance determination. Decisions about your agency remain yours.
           </p>
         </div>
       </section>

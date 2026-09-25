@@ -92,8 +92,8 @@ export async function generateMetadata({ params }) {
   if (!a) return { title: 'Hospice not found' }
   const where = [a.city, a.state].filter(Boolean).join(', ')
   const stateFull = stateName(a.state)
-  const title = `${a.hospice_name}${where ? ` (${where})` : ''} — SSVI Score ${a.fy2025_total_ssvi}/16 & CMS Data`
-  const description = `Published CMS data for ${a.hospice_name}${where ? ` in ${where}` : ''}: FY2025 SSVI score ${a.fy2025_total_ssvi}/16, all nine measures${stateFull ? `, ${stateFull} rank` : ''}. Free — no signup.`
+  const title = `${a.hospice_name}${where ? ` (${where})` : ''}: SSVI Score ${a.fy2025_total_ssvi}/16 & CMS Data`
+  const description = `Published CMS data for ${a.hospice_name}${where ? ` in ${where}` : ''}: FY2025 SSVI score ${a.fy2025_total_ssvi}/16, all nine measures${stateFull ? `, ${stateFull} rank` : ''}. Free, no signup.`
   const url = `${SITE.url}/hospice/${a.slug}`
   return {
     title,
@@ -130,8 +130,8 @@ function ClaimBand({ name, ccn, className = '' }) {
         Is this your hospice?
       </h2>
       <p className="mt-3 max-w-xl text-sm" style={{ color: '#AEBAD0' }}>
-        This page shows your published CMS data. See the full picture behind it
-        — every measure explained, your PEPPER and CAP alongside, and what to
+        This page shows your published CMS data. See the full picture behind it:
+        every measure explained, your PEPPER and CAP alongside, and what to
         fix first.
       </p>
       <Link
@@ -422,7 +422,7 @@ export default async function Page({ params }) {
               </div>
               <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">
                 {change === null || change === undefined
-                  ? '—'
+                  ? 'n/a'
                   : change > 0
                   ? `+${change}`
                   : change === 0
@@ -483,7 +483,7 @@ export default async function Page({ params }) {
                   <>
                     , and its score {yoy} year over year
                     {yoy !== 'held steady'
-                      ? ` — from ${a.fy2024_total_ssvi} in FY2024 to ${score} in FY2025`
+                      ? `, from ${a.fy2024_total_ssvi} in FY2024 to ${score} in FY2025`
                       : ` at ${score}`}
                   </>
                 ) : null}
@@ -494,7 +494,7 @@ export default async function Page({ params }) {
               <p>
                 Its score {yoy} year over year
                 {yoy !== 'held steady'
-                  ? ` — from ${a.fy2024_total_ssvi} in FY2024 to ${score} in FY2025`
+                  ? `, from ${a.fy2024_total_ssvi} in FY2024 to ${score} in FY2025`
                   : ` at ${score}`}
                 .
               </p>

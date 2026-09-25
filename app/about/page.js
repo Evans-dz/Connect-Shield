@@ -4,7 +4,7 @@ import Reveal from "@/components/Reveal";
 import { SITE } from "@/lib/site";
 
 export const metadata = {
-  title: "About Us — A Founder and a 20-Year Hospice Operator",
+  title: "About Us: A Founder and a 20-Year Hospice Operator",
   description:
     "Zac Evans and Justin Larsen started Connect Shield LLC in St. George, Utah, so hospices stay compliant and their billing never freezes. Meet the five-person team behind the platform.",
   alternates: { canonical: `${SITE.url}/about` },
@@ -32,12 +32,12 @@ const PRINCIPLES = [
   {
     icon: EyeOff,
     title: "Zero PHI, by architecture",
-    body: "There is no patient table in this product. Your analysis is built from facility-level reports CMS publishes about your agency — never patient records.",
+    body: "There is no patient table in this product. Your analysis is built from facility-level reports CMS publishes about your agency, never patient records.",
   },
   {
     icon: FileCheck,
     title: "Published data, real numbers",
-    body: "The score on your dashboard is the number in the CMS file — not an estimate. If we show a figure, it reconciles to the official release.",
+    body: "The score on your dashboard is the number in the CMS file, not an estimate. If we show a figure, it reconciles to the official release.",
   },
   {
     icon: Phone,
@@ -77,7 +77,7 @@ export default function About() {
             <div className="mt-6 space-y-4 text-slate text-[15px] leading-relaxed max-w-xl">
               <p>
                 Justin Larsen ran a hospice as an owner-operator for 20 years. Sixteen CMS and state surveys. CHAP accreditation.
-                Two decades of watching how compliance actually fails — not loudly, in a survey, but quietly, in claims data,
+                Two decades of watching how compliance actually fails: not loudly, in a survey, but quietly, in claims data,
                 until the first sign anyone sees is a frozen Medicare payment.
               </p>
               <p>
@@ -86,7 +86,7 @@ export default function About() {
               <p>
                 Zac Evans started Connect Shield with Justin in St. George, Utah, around one position: an agency should never
                 learn about a compliance problem from a frozen payment. CMS builds its picture of your agency from data it
-                publishes. You should be reading that data first — and fixing what it shows before it costs you.
+                publishes. You should be reading that data first, and fixing what it shows before it costs you.
               </p>
               <p className="text-ink font-medium">
                 That's the whole company. Watch what CMS watches, so nothing CMS sees surprises you.
@@ -108,7 +108,7 @@ export default function About() {
                 </div>
               </div>
               <p className="text-sm mt-5" style={{ color: "#AEBAD0" }}>
-                Every analysis the platform runs is read the way a surveyor would read it — because Justin sat on the other
+                Every analysis the platform runs is read the way a surveyor would read it, because Justin sat on the other
                 side of that table for 20 years.
               </p>
               <div className="grid grid-cols-2 gap-3 mt-6">
@@ -133,7 +133,7 @@ export default function About() {
               Five people. All reachable.
             </h2>
             <p className="text-slate mt-3 max-w-xl">
-              No account tiers between you and an answer. The people below are the whole company — and the people on your calls.
+              No account tiers between you and an answer. The people below are the whole company, and the people on your calls.
             </p>
           </Reveal>
 
@@ -203,7 +203,7 @@ export default function About() {
               See your own numbers, with a founder on the call.
             </h2>
             <p className="text-slate mt-3 max-w-xl mx-auto">
-              20 minutes, your CCN loaded, your published SSVI score on screen. Demos are with a founder — not a sales queue.
+              20 minutes, your CCN loaded, your published SSVI score on screen. Demos are with a founder, not a sales queue.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
               <Link

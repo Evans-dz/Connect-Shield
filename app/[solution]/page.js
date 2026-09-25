@@ -21,7 +21,14 @@ export function generateMetadata({ params }) {
     description: s.metaDescription,
     keywords: s.keywords,
     alternates: { canonical: url },
-    openGraph: { title: s.metaTitle, description: s.metaDescription, url, type: "article" },
+    // A page-level openGraph replaces the root one, so the share image has to be restated.
+    openGraph: {
+      title: s.metaTitle,
+      description: s.metaDescription,
+      url,
+      type: "article",
+      images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "Connect Shield | Hospice Compliance Intelligence" }],
+    },
   };
 }
 
@@ -81,7 +88,7 @@ export default function SolutionPage({ params }) {
       <section className="max-w-content mx-auto px-5 md:px-8 py-20 md:py-24">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
           <Reveal>
-            <div className="eyebrow">{s.what.title}</div>
+            <h2 className="eyebrow">{s.what.title}</h2>
             <p className="font-display text-ink mt-4" style={{ fontSize: "clamp(1.4rem, 2.4vw, 1.9rem)", lineHeight: 1.3 }}>
               {s.what.body}
             </p>
@@ -127,7 +134,7 @@ export default function SolutionPage({ params }) {
       {faqs.length > 0 && (
         <section className="max-w-content mx-auto px-5 md:px-8 py-20 md:py-24">
           <Reveal>
-            <div className="eyebrow">Common question</div>
+            <h2 className="eyebrow">Common question</h2>
             <div className="mt-6 max-w-3xl">
               {faqs.map((f) => (
                 <div key={f.q} className="py-5" style={{ borderTop: "1px solid #E3E7ED" }}>

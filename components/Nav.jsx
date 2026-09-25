@@ -28,7 +28,7 @@ export default function Nav() {
       }}
     >
       <div className="max-w-content mx-auto px-5 md:px-8 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2.5 shrink-0">
+        <Link href="/" className="flex items-center gap-2.5 shrink-0 min-h-[44px]">
           <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#B8863F" }}>
             <ShieldCheck size={17} color="#0E1830" />
           </span>
@@ -71,31 +71,37 @@ export default function Nav() {
           </Link>
         </div>
 
-        <button className="md:hidden text-white p-1" onClick={() => setOpen((v) => !v)} aria-label="Menu">
+        <button
+          className="md:hidden text-white w-11 h-11 -mr-2.5 flex items-center justify-center"
+          onClick={() => setOpen((v) => !v)}
+          aria-label="Menu"
+          aria-expanded={open}
+          aria-controls="mobile-menu"
+        >
           {open ? <X size={22} /> : <Menu size={22} />}
         </button>
       </div>
 
       {open && (
-        <div className="md:hidden px-5 pb-5 pt-1" style={{ background: "#0E1830", borderBottom: "1px solid #243354" }}>
+        <div id="mobile-menu" className="md:hidden px-5 pb-5 pt-1" style={{ background: "#0E1830", borderBottom: "1px solid #243354" }}>
           <div className="eyebrow mt-3 mb-2">Solutions</div>
           <div className="grid grid-cols-2 gap-1 mb-3">
             {SOLUTIONS.map((s) => (
-              <Link key={s.slug} href={`/${s.slug}`} onClick={() => setOpen(false)} className="px-3 py-2 rounded-lg text-sm text-slate-faint hover:text-white" style={{ background: "#14213D" }}>
+              <Link key={s.slug} href={`/${s.slug}`} onClick={() => setOpen(false)} className="px-3 py-3 rounded-lg text-sm text-slate-faint hover:text-white" style={{ background: "#14213D" }}>
                 {s.nav}
               </Link>
             ))}
           </div>
           {NAV.filter((n) => n.label !== "Solutions").map((n) => (
-            <Link key={n.href} href={n.href} onClick={() => setOpen(false)} className="block px-1 py-2.5 text-sm text-slate-faint">
+            <Link key={n.href} href={n.href} onClick={() => setOpen(false)} className="block px-1 py-3 text-sm text-slate-faint">
               {n.label}
             </Link>
           ))}
           <div className="flex gap-2 mt-3">
-            <Link href="/login" onClick={() => setOpen(false)} className="flex-1 text-center px-4 py-2.5 text-sm rounded-lg text-white" style={{ border: "1px solid #243354" }}>
+            <Link href="/login" onClick={() => setOpen(false)} className="flex-1 text-center px-4 py-3 text-sm rounded-lg text-white" style={{ border: "1px solid #243354" }}>
               Sign in
             </Link>
-            <Link href="/demo" onClick={() => setOpen(false)} className="flex-1 text-center px-4 py-2.5 text-sm font-medium rounded-lg" style={{ background: "#B8863F", color: "#0E1830" }}>
+            <Link href="/demo" onClick={() => setOpen(false)} className="flex-1 text-center px-4 py-3 text-sm font-medium rounded-lg" style={{ background: "#B8863F", color: "#0E1830" }}>
               Book a demo
             </Link>
           </div>

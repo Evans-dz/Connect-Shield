@@ -4,9 +4,9 @@ import Reveal from "@/components/Reveal";
 import { SITE } from "@/lib/site";
 
 export const metadata = {
-  title: "Pricing — Every Tool, Every Update, One Price",
+  title: "Pricing: Every Tool, Every Update, One Price",
   description:
-    "Connect Shield pricing for hospice agencies. Every plan includes every compliance tool and all future features — you only pay for how many agencies and people you have. Encrypted, per-clinic isolated access.",
+    "Connect Shield pricing for hospice agencies. Every plan includes every compliance tool and all future features. You only pay for how many agencies and people you have. Encrypted, per-clinic isolated access.",
   alternates: { canonical: `${SITE.url}/pricing` },
 };
 
@@ -14,7 +14,7 @@ export const metadata = {
 const TOOLKIT = [
   "SSVI score + all 9 measures (published FY2025, year-over-year trend)",
   "Medicare CAP exposure & clawback calculator",
-  "PS&R Report 810 analysis — RN intensity, LOS, reimbursement",
+  "PS&R Report 810 analysis: RN intensity, LOS, reimbursement",
   "PEPPER outlier analysis",
   "CAHPS tracking & national benchmarking",
   "QAPI project support",
@@ -78,7 +78,7 @@ const ADDONS = [
   },
   {
     name: "90-Day SSVI Remediation Plan",
-    body: "A done-for-you roadmap to pull a high SSVI down — which measures to attack, in what order, with milestones.",
+    body: "A done-for-you roadmap to pull a high SSVI down: which measures to attack, in what order, with milestones.",
     price: "$2,500–$3,500",
     note: "one-time",
     cadence: "One-time",
@@ -94,7 +94,7 @@ const ADDONS = [
   },
   {
     name: "Done-For-You Data Setup",
-    body: "We pull and upload your PS&R, CAP, and PEPPER each period so your dashboard is always current — hands-off.",
+    body: "Hands-off: we pull and upload your PS&R, CAP, and PEPPER each period so your dashboard is always current.",
     price: "$200/mo",
     note: "per agency",
     cadence: "Recurring",
@@ -144,7 +144,7 @@ export default function Pricing() {
           <Reveal>
             <div className="eyebrow">Included in every plan</div>
             <h2 className="font-display text-ink mt-3" style={{ fontSize: "clamp(1.6rem, 3vw, 2.2rem)", lineHeight: 1.1 }}>
-              The complete platform — in all three tiers.
+              The complete platform, in all three tiers.
             </h2>
             <p className="text-slate mt-3 max-w-xl">
               Whether you run one agency or fifty, you get the same full toolset. Tiers below differ only by scale.
@@ -266,9 +266,9 @@ export default function Pricing() {
               <div>
                 <div className="font-display text-lg text-white">Start annual, and the Remediation Plan is on us.</div>
                 <p className="text-sm mt-1.5" style={{ color: "#AEBAD0" }}>
-                  Sign an annual Multi-Agency or Enterprise plan and we include the 90-Day SSVI Remediation Plan free — the fastest way to turn a high score around.
+                  Sign an annual Multi-Agency or Enterprise plan and we include the 90-Day SSVI Remediation Plan free. It's the fastest way to turn a high score around.
                 </p>
-                <Link href="/demo" className="inline-flex items-center gap-2 mt-4 text-sm font-medium rounded-lg px-4 py-2" style={{ background: "#B8863F", color: "#0E1830" }}>
+                <Link href="/demo" className="inline-flex items-center gap-2 mt-4 text-sm font-medium rounded-lg px-4 py-3" style={{ background: "#B8863F", color: "#0E1830" }}>
                   Book a demo <ArrowRight size={15} />
                 </Link>
               </div>

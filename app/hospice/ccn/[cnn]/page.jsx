@@ -19,7 +19,7 @@ function displayCcn(raw) {
 export async function generateMetadata({ params }) {
   const ccn = displayCcn(decodeURIComponent(params.cnn || ''))
   return {
-    title: ccn ? `CCN ${ccn} — Hospice SSVI Lookup` : 'Hospice SSVI Lookup',
+    title: ccn ? `CCN ${ccn}: Hospice SSVI Lookup` : 'Hospice SSVI Lookup',
     description:
       'Look up a Medicare-certified hospice by CCN to see its published FY2025 CMS Service and Spending Variation Index score.',
     // Unscored-CCN pages are an unbounded URL space; keep them out of the index.
@@ -72,12 +72,12 @@ export default async function Page({ params }) {
             <p className="mt-4 text-slate-700">
               This CCN is not in the FY2025 SSVI data file CMS published with
               the FY2027 hospice final rule. That file covers roughly 6,643
-              Medicare-certified hospices &mdash; but not all of them.
+              Medicare-certified hospices, but not all of them.
             </p>
             <p className="mt-3 text-slate-700">
               Agencies that are new to Medicare, and agencies with too few
               claims to meet CMS reporting thresholds, are excluded from the
-              file. No published score does not mean a score of zero &mdash; it
+              file. No published score does not mean a score of zero. It
               means CMS did not calculate one.
             </p>
           </>
@@ -98,7 +98,7 @@ export default async function Page({ params }) {
           </h2>
           <p className="mt-2 text-slate-300">
             Connect Shield tracks your compliance picture even before CMS
-            publishes a score for you &mdash; PEPPER, CAHPS, QAPI, and
+            publishes a score for you: PEPPER, CAHPS, QAPI, and
             PS&amp;R in one dashboard.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
