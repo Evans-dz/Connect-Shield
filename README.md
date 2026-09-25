@@ -112,3 +112,23 @@ npm run dev
   behind login (Stage 2).
 - Fonts load via `next/font` at build time (needs network on the build machine — Vercel
   handles this automatically).
+
+## Polish pass (2026-09-25)
+
+The public marketing site and hospice directory were brought up to the EZHD
+professional-polish standard (`~/Projects/EZHD/ezhd-lab/reference/professional-polish.md`)
+in commits `be3171b`, `837e365` and `c4b7888`. Re-check any time with
+`node ~/Projects/EZHD/ezhd-lab/verify/audit.mjs --url https://connect-shield.com`.
+
+- **No em dashes** in copy, titles, meta, alt text or JSON-LD, including the privacy and terms
+  pages (punctuation-only edits there; the legal substance is unchanged). The audit fails on any.
+- **Titles:** template is `%s | Connect Shield`; every title is 65 characters or fewer
+  (home went from 68 to 55).
+- **Structure:** skip link to `#main`; anchors clear the sticky header (`scroll-margin-top`);
+  heading order fixed (the lookup card's heading level is a prop, h2 in the home hero; solution-page
+  eyebrows over h3 groups became h2s with the same styling); BreadcrumbList schema on sub-pages.
+- **Phones:** 44px tap targets on the header, mobile menu, footer and CTAs (desktop spacing unchanged).
+- **Forms:** demo form labels tied to inputs, autocomplete tokens, `type="tel"` on the phone field.
+- **Share images:** solution pages restate the share image their openGraph block had dropped.
+- **`public/llms.txt`** added and excluded from the auth middleware, like `robots.txt`.
+- It already had a custom 404, privacy and terms before this pass.

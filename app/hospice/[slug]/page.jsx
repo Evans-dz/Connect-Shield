@@ -141,7 +141,7 @@ function ClaimBand({ name, ccn, className = '' }) {
       </p>
       <Link
         href={`/demo?${query}`}
-        className="mt-5 inline-flex rounded-lg bg-[#E8CFA0] px-5 py-2.5 text-sm font-medium text-[#0e1830] hover:bg-[#f0dcb6]"
+        className="mt-5 inline-flex rounded-lg bg-[#E8CFA0] px-5 py-3 text-sm font-medium text-[#0e1830] hover:bg-[#f0dcb6]"
       >
         Claim your walkthrough
       </Link>
@@ -608,7 +608,7 @@ export default async function Page({ params }) {
                   ? `/demo?ccn=${encodeURIComponent(a.ccn)}&agency=${encodeURIComponent(a.hospice_name || '')}`
                   : '/demo'
               }
-              className="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-amber-500"
+              className="rounded-lg bg-amber-600 px-5 py-3 text-sm font-medium text-white hover:bg-amber-500"
             >
               Book a demo
             </Link>
@@ -616,7 +616,7 @@ export default async function Page({ params }) {
               href={
                 a.state ? `/hospice/state/${a.state.toLowerCase()}` : '/hospice'
               }
-              className="rounded-lg border border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800"
+              className="rounded-lg border border-slate-700 px-5 py-3 text-sm font-medium text-slate-200 hover:bg-slate-800"
             >
               {stateLabel ? `See all ${stateLabel} hospices` : 'Browse all states'}
             </Link>

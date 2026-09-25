@@ -339,7 +339,7 @@ export default function SSVIMap({ states }) {
                 <button
                   key={s.code}
                   onClick={() => pick(s.code)}
-                  className="rounded-lg border px-3 py-2 text-sm"
+                  className="rounded-lg border px-3 py-3 text-sm"
                   style={{
                     background: fillFor(s.code),
                     color: inkFor(s.code),

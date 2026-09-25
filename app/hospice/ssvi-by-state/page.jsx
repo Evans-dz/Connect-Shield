@@ -82,7 +82,7 @@ function CompositionCard({ title, note, items, half }) {
             <div className="flex items-baseline justify-between gap-3">
               <Link
                 href={`/hospice/state/${s.code.toLowerCase()}`}
-                className="text-sm font-medium text-slate-900 hover:text-amber-700"
+                className="relative text-sm font-medium text-slate-900 hover:text-amber-700 after:absolute after:-inset-3 after:content-['']"
               >
                 {s.code}
               </Link>
@@ -515,12 +515,12 @@ export default async function Page() {
             <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
               Highest average SSVI
             </h3>
-            <ul className="mt-4 space-y-2">
+            <ul className="mt-4 md:space-y-0">
               {highest.map((s, i) => (
                 <li key={s.code} className="flex items-center justify-between">
                   <Link
                     href={`/hospice/state/${s.code.toLowerCase()}`}
-                    className="text-sm font-medium text-slate-900 hover:text-amber-700"
+                    className="inline-flex items-center min-h-[44px] min-w-[44px] md:min-h-[28px] text-sm font-medium text-slate-900 hover:text-amber-700"
                   >
                     {i + 1}. {s.code}
                   </Link>
@@ -536,12 +536,12 @@ export default async function Page() {
             <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
               Lowest average SSVI
             </h3>
-            <ul className="mt-4 space-y-2">
+            <ul className="mt-4 md:space-y-0">
               {lowest.map((s, i) => (
                 <li key={s.code} className="flex items-center justify-between">
                   <Link
                     href={`/hospice/state/${s.code.toLowerCase()}`}
-                    className="text-sm font-medium text-slate-900 hover:text-amber-700"
+                    className="inline-flex items-center min-h-[44px] min-w-[44px] md:min-h-[28px] text-sm font-medium text-slate-900 hover:text-amber-700"
                   >
                     {i + 1}. {s.code}
                   </Link>
@@ -662,13 +662,13 @@ export default async function Page() {
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
               href="/hospice"
-              className="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-amber-500"
+              className="rounded-lg bg-amber-600 px-5 py-3 text-sm font-medium text-white hover:bg-amber-500"
             >
               Search all {rows.length.toLocaleString()} agencies
             </Link>
             <Link
               href="/demo"
-              className="rounded-lg border border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800"
+              className="rounded-lg border border-slate-700 px-5 py-3 text-sm font-medium text-slate-200 hover:bg-slate-800"
             >
               Book a demo
             </Link>

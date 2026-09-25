@@ -104,13 +104,13 @@ export default async function Page({ params }) {
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
               href="/demo"
-              className="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-amber-500"
+              className="rounded-lg bg-amber-600 px-5 py-3 text-sm font-medium text-white hover:bg-amber-500"
             >
               Book a demo
             </Link>
             <Link
               href="/hospice"
-              className="rounded-lg border border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800"
+              className="rounded-lg border border-slate-700 px-5 py-3 text-sm font-medium text-slate-200 hover:bg-slate-800"
             >
               Browse all states
             </Link>
