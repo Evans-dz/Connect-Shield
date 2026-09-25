@@ -4,7 +4,7 @@ import { SITE } from "@/lib/site";
 export const metadata = {
   title: "Terms of Service",
   description:
-    "Connect Shield's terms of service in plain English: 12-month subscriptions, demo-gated signup, acceptable use, the no-PHI clause, and what our scores and analysis are — and are not.",
+    "Connect Shield's terms of service in plain English: 12-month subscriptions, demo-gated signup, acceptable use, the no-PHI clause, and what our scores and analysis are (and are not).",
   alternates: { canonical: `${SITE.url}/terms` },
 };
 
@@ -59,7 +59,7 @@ export default function Terms() {
           <div className="rounded-2xl p-6 md:p-7 bg-white" style={{ border: "1px solid #E3E7ED" }}>
             <div className="eyebrow">The short version</div>
             <div className="mt-4 text-sm text-ink space-y-2">
-              <p>Subscriptions run 12 months and start after a demo — no self-serve signup.</p>
+              <p>Subscriptions run 12 months and start after a demo. No self-serve signup.</p>
               <p>Never upload PHI. The product doesn't need it and the contract forbids it.</p>
               <p>Scores and analysis are information, not legal or clinical advice.</p>
               <p>Use the portal honestly, keep your credentials to yourself, and we'll take good care of you.</p>
@@ -75,7 +75,7 @@ export default function Terms() {
           <Section n="02" title="Subscriptions & term">
             <Bullets
               items={[
-                "Access starts with a demo — accounts are provisioned per clinic after a demo call, not self-serve.",
+                "Access starts with a demo; accounts are provisioned per clinic after a demo call, not self-serve.",
                 "The subscription term is 12 months, billed monthly unless your order form says otherwise.",
                 "Plans renew for successive 12-month terms unless either side gives notice before renewal.",
                 "Pricing is confirmed on your demo call and stated in your order form.",
@@ -87,7 +87,7 @@ export default function Terms() {
             <Bullets
               items={[
                 "Keep credentials confidential; you are responsible for activity under your accounts.",
-                "Seats are for named individual users — no shared logins.",
+                "Seats are for named individual users. No shared logins.",
                 "Tell us promptly at the address below if you suspect unauthorized access.",
               ]}
             />
@@ -99,21 +99,21 @@ export default function Terms() {
               items={[
                 "Probe, disable, or interfere with the service or its security features.",
                 "Scrape, resell, or republish the platform's analysis outside your organization without written permission.",
-                "Access another clinic's data or attempt to — every portal is isolated to its own clinic.",
+                "Access another clinic's data or attempt to; every portal is isolated to its own clinic.",
                 "Use the service to violate any law or regulation.",
               ]}
             />
           </Section>
 
-          <Section n="05" title="No PHI — ever">
+          <Section n="05" title="No PHI, ever">
             <p>
-              You agree not to upload, transmit, or store Protected Health Information or any identifiable patient data in the service. {SITE.name} operates exclusively on aggregate, facility-level data — published CMS files and the facility-level reports you upload (PS&amp;R, PEPPER, CAHPS, QAPI). If PHI is uploaded in breach of this clause, we may delete it and suspend the uploading account until resolved. See <Link href="/security" className="underline" style={{ color: "#B8863F" }}>Security</Link> for how the platform is built to make this easy.
+              You agree not to upload, transmit, or store Protected Health Information or any identifiable patient data in the service. {SITE.name} operates exclusively on aggregate, facility-level data: published CMS files and the facility-level reports you upload (PS&amp;R, PEPPER, CAHPS, QAPI). If PHI is uploaded in breach of this clause, we may delete it and suspend the uploading account until resolved. See <Link href="/security" className="underline" style={{ color: "#B8863F" }}>Security</Link> for how the platform is built to make this easy.
             </p>
           </Section>
 
           <Section n="06" title="Informational, not advice">
             <p>
-              Scores, flags, estimates, and AI-generated analysis in the platform are informational tools built from published CMS data and the documents you provide. They are not legal advice, clinical advice, or a compliance determination — and they are not a CMS determination of fraud, waste, or abuse. Decisions about your agency remain yours; consult your own counsel and clinical leadership.
+              Scores, flags, estimates, and AI-generated analysis in the platform are informational tools built from published CMS data and the documents you provide. They are not legal advice, clinical advice, or a compliance determination, and they are not a CMS determination of fraud, waste, or abuse. Decisions about your agency remain yours; consult your own counsel and clinical leadership.
             </p>
           </Section>
 
@@ -122,14 +122,14 @@ export default function Terms() {
               items={[
                 "You own the reports and data you upload; you grant us the license needed to process them for you.",
                 "We own the platform, its analysis models, and its published-data compilations.",
-                "On termination, we delete your uploaded data on request — email us.",
+                "On termination, we delete your uploaded data on request; email us.",
               ]}
             />
           </Section>
 
           <Section n="08" title="Service & availability">
             <p>
-              We work to keep the service fast and available, but it is provided "as is" and "as available" — no warranty of uninterrupted or error-free operation. Published CMS data is reproduced as released and may itself change or be corrected by CMS.
+              We work to keep the service fast and available, but it is provided "as is" and "as available"; no warranty of uninterrupted or error-free operation. Published CMS data is reproduced as released and may itself change or be corrected by CMS.
             </p>
           </Section>
 

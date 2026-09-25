@@ -62,7 +62,7 @@ export default function Privacy() {
             <div className="mt-4 text-sm text-ink space-y-2">
               <p>This is the privacy policy of Connect Shield LLC (&quot;Connect Shield&quot;).</p>
               <p>We collect the minimum needed to run your account: a name, a work email, your agency details, and anonymous usage analytics.</p>
-              <p>We never collect PHI or patient data — the product is built so there is nowhere to put it.</p>
+              <p>We never collect PHI or patient data; the product is built so there is nowhere to put it.</p>
               <p>We never sell your data. Ever.</p>
               <p>Want your data deleted? Email <a href={`mailto:${SITE.email}`} className="underline" style={{ color: "#B8863F" }}>{SITE.email}</a>.</p>
             </div>
@@ -73,7 +73,7 @@ export default function Privacy() {
               items={[
                 "Account details: your name, work email, and hashed login credentials.",
                 "Demo-form fields: name, work email, agency name, CCN, role, and anything you type in the message box.",
-                "Billing details: handled by our payment processor — we never see or store full card numbers.",
+                "Billing details: handled by our payment processor; we never see or store full card numbers.",
                 "Usage analytics: aggregate page views and performance data via Vercel Analytics.",
                 "Uploaded reports: the facility-level CMS reports you choose to upload (PS&R, PEPPER, CAHPS, QAPI).",
               ]}
@@ -106,7 +106,7 @@ export default function Privacy() {
 
           <Section n="05" title="Who we share with">
             <p>
-              Only the infrastructure that runs the service — hosting, database, email delivery, and payment processing providers — each bound by their own contractual data-protection terms, and only what they need to do their job. We disclose data if the law genuinely requires it, and we will tell you when we are allowed to.
+              Only the infrastructure that runs the service (hosting, database, email delivery, and payment processing providers), each bound by their own contractual data-protection terms, and only what they need to do their job. We disclose data if the law genuinely requires it, and we will tell you when we are allowed to.
             </p>
           </Section>
 
@@ -115,7 +115,7 @@ export default function Privacy() {
               items={[
                 `Request deletion of your account and data any time: email ${SITE.email}.`,
                 "Unsubscribe from marketing email with one click; service emails continue while you have an account.",
-                "Ask us what we hold about you — we'll tell you.",
+                "Ask us what we hold about you; we'll tell you.",
               ]}
             />
           </Section>
@@ -148,7 +148,7 @@ export default function Privacy() {
 
           <Section n="10" title="Contact">
             <p>
-              Questions about privacy: <a href={`mailto:${SITE.email}`} className="underline" style={{ color: "#B8863F" }}>{SITE.email}</a> — or see <Link href="/contact" className="underline" style={{ color: "#B8863F" }}>Contact &amp; Team</Link>.
+              Questions about privacy: <a href={`mailto:${SITE.email}`} className="underline" style={{ color: "#B8863F" }}>{SITE.email}</a>, or see <Link href="/contact" className="underline" style={{ color: "#B8863F" }}>Contact &amp; Team</Link>.
             </p>
           </Section>
         </div>
