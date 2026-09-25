@@ -117,7 +117,8 @@ npm run dev
 
 The public marketing site and hospice directory were brought up to the EZHD
 professional-polish standard (`~/Projects/EZHD/ezhd-lab/reference/professional-polish.md`)
-in commits `be3171b`, `837e365` and `c4b7888`. Re-check any time with
+in commits `be3171b`, `837e365`, `c4b7888`, `50c64ce` and `d3f5fec`, merged to `main` and live
+(live audit 0 failing / 0 warnings). Re-check any time with
 `node ~/Projects/EZHD/ezhd-lab/verify/audit.mjs --url https://connect-shield.com`.
 
 - **No em dashes** in copy, titles, meta, alt text or JSON-LD, including the privacy and terms
@@ -127,7 +128,9 @@ in commits `be3171b`, `837e365` and `c4b7888`. Re-check any time with
 - **Structure:** skip link to `#main`; anchors clear the sticky header (`scroll-margin-top`);
   heading order fixed (the lookup card's heading level is a prop, h2 in the home hero; solution-page
   eyebrows over h3 groups became h2s with the same styling); BreadcrumbList schema on sub-pages.
-- **Phones:** 44px tap targets on the header, mobile menu, footer and CTAs (desktop spacing unchanged).
+- **Phones:** 44px tap targets on the header, mobile menu, footer and CTAs (desktop spacing unchanged),
+  the hospice directory (state links, CTAs, map chips) and the SSVI-by-state map (wider hit area for
+  narrow state codes like IL and RI).
 - **Forms:** demo form labels tied to inputs, autocomplete tokens, `type="tel"` on the phone field.
 - **Share images:** solution pages restate the share image their openGraph block had dropped.
 - **`public/llms.txt`** added and excluded from the auth middleware, like `robots.txt`.
