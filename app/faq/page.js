@@ -37,7 +37,7 @@ const COMPANY_FAQ = [
   },
   {
     q: "Who is behind Connect Shield?",
-    a: "Connect Shield LLC, based in St. George, Utah. It was founded by Zac Evans with Justin Larsen. Justin is a hospice owner-operator of 20 years, a Certified Hospice Administrator, and a veteran of 16 CMS and state surveys.",
+    a: "Connect Shield LLC, based in St. George, Utah. It was started by Zac Evans and built with a hospice owner-operator of 20 years: a Certified Hospice Administrator and a veteran of 16 CMS and state surveys.",
     link: { href: "/about", label: "Meet the team" },
   },
   {

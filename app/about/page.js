@@ -8,11 +8,11 @@ import BreadcrumbLd from "@/components/BreadcrumbLd";
 export const metadata = {
   title: fitTitle("About Connect Shield: A Founder and a 20-Year Hospice Operator"),
   description:
-    "Zac Evans and Justin Larsen started Connect Shield LLC in St. George, Utah, so hospices stay compliant and their billing never freezes. Meet the five-person team behind the platform.",
+    "Zac Evans started Connect Shield LLC in St. George, Utah, with a 20-year hospice operator, so hospices stay compliant and their billing never freezes. Meet the team behind the platform.",
   alternates: { canonical: `${SITE.url}/about` },
 };
 
-// Justin Larsen — the clinical backbone of the product.
+// The 20-year operator the product was built with: its clinical backbone.
 const CREDENTIALS = [
   { value: "20 yrs", label: "Hospice owner-operator" },
   { value: "CHA", label: "Certified Hospice Administrator" },
@@ -24,9 +24,6 @@ const CREDENTIALS = [
 // (e.g. /public/team/zac.jpg) when headshots land.
 const TEAM = [
   { name: "Zac Evans", title: "Founder", initials: "ZE" },
-  { name: "Justin Larsen", title: "Clinical Director of Success", initials: "JL" },
-  { name: "Jase Larsen", title: "Client Relations Specialist", initials: "JL" },
-  { name: "Lori Larsen", title: "Operations Specialist", initials: "LL" },
   { name: "Dylan Evans", title: "Customer Service", initials: "DE" },
 ];
 
@@ -69,7 +66,7 @@ export default function About() {
         </div>
       </section>
 
-      {/* Founding story + Justin's credentials */}
+      {/* Founding story + the operator's credentials */}
       <section className="max-w-content mx-auto px-5 md:px-8 py-16 md:py-24">
         <div className="grid lg:grid-cols-2 gap-10 items-start">
           <Reveal>
@@ -79,7 +76,7 @@ export default function About() {
             </h2>
             <div className="mt-6 space-y-4 text-slate text-[15px] leading-relaxed max-w-xl">
               <p>
-                Justin Larsen ran a hospice as an owner-operator for 20 years. Sixteen CMS and state surveys. CHAP accreditation.
+                Connect Shield was built with a hospice owner-operator of 20 years. Sixteen CMS and state surveys. CHAP accreditation.
                 Two decades of watching how compliance actually fails: not loudly, in a survey, but quietly, in claims data,
                 until the first sign anyone sees is a frozen Medicare payment.
               </p>
@@ -87,7 +84,7 @@ export default function About() {
                 By then it isn't a warning. Payroll is due, the census is full, and the problem is already months old.
               </p>
               <p>
-                Zac Evans started Connect Shield with Justin in St. George, Utah, around one position: an agency should never
+                Zac Evans started Connect Shield in St. George, Utah, around one position: an agency should never
                 learn about a compliance problem from a frozen payment. CMS builds its picture of your agency from data it
                 publishes. You should be reading that data first, and fixing what it shows before it costs you.
               </p>
@@ -100,19 +97,9 @@ export default function About() {
           <Reveal delay={80}>
             <div className="rounded-2xl p-7 md:p-8" style={{ background: "#14213D" }}>
               <div className="eyebrow" style={{ color: "#E8CFA0" }}>The clinical backbone</div>
-              <div className="flex items-center gap-4 mt-5">
-                {/* PHOTO PENDING — replace this initials block with Justin's headshot. */}
-                <div className="w-16 h-16 rounded-2xl flex items-center justify-center font-display text-xl shrink-0" style={{ background: "#B8863F", color: "#0E1830" }}>
-                  JL
-                </div>
-                <div>
-                  <h3 className="font-display text-xl text-white">Justin Larsen</h3>
-                  <div className="text-[12px] font-mono mt-1" style={{ color: "#E8CFA0" }}>Clinical Director of Success</div>
-                </div>
-              </div>
               <p className="text-sm mt-5" style={{ color: "#AEBAD0" }}>
-                Every analysis the platform runs is read the way a surveyor would read it, because Justin sat on the other
-                side of that table for 20 years.
+                Every analysis the platform runs is read the way a surveyor would read it, because the operator it was built
+                with sat on the other side of that table for 20 years.
               </p>
               <div className="grid grid-cols-2 gap-3 mt-6">
                 {CREDENTIALS.map((c) => (
@@ -133,10 +120,10 @@ export default function About() {
           <Reveal>
             <div className="eyebrow">The team</div>
             <h2 className="font-display text-ink mt-3" style={{ fontSize: "clamp(1.6rem, 3vw, 2.2rem)", lineHeight: 1.1 }}>
-              Five people. All reachable.
+              A small team. All reachable.
             </h2>
             <p className="text-slate mt-3 max-w-xl">
-              No account tiers between you and an answer. The people below are the whole company, and the people on your calls.
+              No account tiers between you and an answer. The people below are the people on your calls.
             </p>
           </Reveal>
 

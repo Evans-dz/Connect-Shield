@@ -97,7 +97,7 @@ export default function Contact() {
         <Reveal delay={120}>
           <p className="text-sm text-slate mt-8">
             Wondering who does what?{" "}
-            <Link href="/about" className="text-ink underline">Meet the full team on the about page</Link>.
+            <Link href="/about" className="text-ink underline">Meet the team on the about page</Link>.
           </p>
           <p className="text-[12px] font-mono mt-3" style={{ color: "#8992A3" }}>
             Please don't email PHI or patient details (<Link href="/security" className="underline">here's why</Link>).
