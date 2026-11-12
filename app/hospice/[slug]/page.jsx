@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { SITE } from '@/lib/site'
 import { stateName } from '@/lib/states'
 import { fitTitle } from '@/lib/title'
+import { withDisplayNames } from '@/lib/names'
 import NearbyHospices from '@/components/hospice/NearbyHospices'
 import AgencyFAQ from '@/components/hospice/AgencyFAQ'
 
@@ -48,7 +49,7 @@ async function getAgency(slug) {
     .maybeSingle()
   if (error) return { a: null, failed: true }
   if (!data || data.fy2025_total_ssvi === null) return { a: null, failed: false }
-  return { a: data, failed: false }
+  return { a: withDisplayNames(data), failed: false }
 }
 
 async function fetchStateRows(state) {
@@ -64,7 +65,7 @@ async function fetchStateRows(state) {
       .order('fy2025_total_ssvi', { ascending: false })
       .range(i * PAGE, i * PAGE + PAGE - 1)
     if (error || !data || data.length === 0) break
-    rows.push(...data)
+    rows.push(...data.map(withDisplayNames))
     if (data.length < PAGE) break
   }
   return rows
@@ -385,7 +386,7 @@ export default async function Page({ params }) {
             <p className="mt-6 text-slate-700">
               Ranked{' '}
               <strong className="font-semibold text-slate-900">
-                {a.rank_national} of {a.n_national?.toLocaleString()}
+                {a.rank_national?.toLocaleString()} of {a.n_national?.toLocaleString()}
               </strong>{' '}
               hospices nationally
               {a.state && a.rank_state ? (
@@ -393,7 +394,7 @@ export default async function Page({ params }) {
                   {' '}
                   and{' '}
                   <strong className="font-semibold text-slate-900">
-                    {a.rank_state} of {a.n_state?.toLocaleString()}
+                    {a.rank_state?.toLocaleString()} of {a.n_state?.toLocaleString()}
                   </strong>{' '}
                   in {stateLabel}
                 </>
@@ -432,7 +433,7 @@ export default async function Page({ params }) {
                   ? `+${change}`
                   : change === 0
                   ? 'No change'
-                  : change}
+                  : `−${Math.abs(change)}`}
               </div>
               {hasPrior && (
                 <div className="mt-1 text-sm text-slate-500">

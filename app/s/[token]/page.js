@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Gauge from "@/components/Gauge";
 import { supabaseService, supabasePublic, riskFromScore } from "@/lib/supabase";
+import { withDisplayNames } from "@/lib/names";
 import {
   NATIONAL_AVG_SSVI,
   NATIONAL_SCORED_COUNT,
@@ -234,7 +235,8 @@ export default async function SnapshotPage({ params }) {
     );
   }
 
-  const { row, stateAvg, expiresAt } = snapshot;
+  const { stateAvg, expiresAt } = snapshot;
+  const row = withDisplayNames(snapshot.row);
   const total = Number(row.fy2025_total_ssvi);
   const risk = riskFromScore(total);
   const agencyName = row.hospice_name || `CCN ${row.ccn}`;

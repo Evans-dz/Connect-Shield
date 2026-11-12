@@ -2,6 +2,8 @@ import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { supabasePublic, riskFromScore } from "@/lib/supabase";
+import { withDisplayNames } from "@/lib/names";
+import { SITE } from "@/lib/site";
 
 export const runtime = "nodejs";
 export const alt = "Hospice SSVI score card from Connect Shield";
@@ -13,6 +15,19 @@ const RISK_HEX = { low: "#2E9E62", mid: "#C98A1F", high: "#D14343" };
 async function loadAsset(name) {
   try {
     const buf = await readFile(join(process.cwd(), "public", name));
+    return `data:image/png;base64,${buf.toString("base64")}`;
+  } catch {
+    // On Vercel this dynamic route's function is not traced with public/, so
+    // the read above fails and the card lost its logo. Fall back to the copy
+    // the CDN serves.
+  }
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch(`${SITE.url}/${name}`, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
     return `data:image/png;base64,${buf.toString("base64")}`;
   } catch {
     return null;
@@ -65,7 +80,7 @@ async function getAgency(slug) {
     );
     const { data } = await Promise.race([query, timeout]);
     if (!data || data.fy2025_total_ssvi == null) return null;
-    return data;
+    return withDisplayNames(data);
   } catch {
     return null;
   }

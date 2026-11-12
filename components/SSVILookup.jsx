@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
+import { displayName } from '@/lib/names'
 
 const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -132,11 +133,11 @@ export default function SSVILookup({
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium text-slate-900">
-                      {r.hospice_name}
+                      {displayName(r.hospice_name)}
                     </span>
                     <span className="block text-xs text-slate-500">
                       CCN {r.ccn}
-                      {r.city ? ` · ${r.city}` : ''}
+                      {r.city ? ` · ${displayName(r.city)}` : ''}
                       {r.state ? `, ${r.state}` : ''}
                     </span>
                   </span>

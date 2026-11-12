@@ -5,6 +5,8 @@
 // function degrades to null instead of throwing, so a dead Supabase URL or a
 // missing row renders an empty state, never a crash.
 
+import { withDisplayNames } from "@/lib/names";
+
 // FY2025 national mean of the published CMS SSVI file. The dashboard's SSVI
 // panel already prints this same figure ("National avg: 6.42 · Median: 7").
 // Update alongside the annual CMS refresh.
@@ -69,7 +71,7 @@ export async function fetchPublicRow(db, ccn) {
       .ilike("ccn", ccn)
       .limit(1);
     if (error || !data || !data.length) return null;
-    return data[0];
+    return withDisplayNames(data[0]);
   } catch {
     return null;
   }

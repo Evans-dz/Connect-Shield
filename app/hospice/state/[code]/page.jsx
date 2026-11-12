@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { SITE } from '@/lib/site'
 import { stateName } from '@/lib/states'
 import { fitTitle } from '@/lib/title'
+import { withDisplayNames } from '@/lib/names'
 
 const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -82,7 +83,7 @@ export default async function Page({ params }) {
   const name = stateName(st)
   if (!name) notFound()
 
-  const data = await fetchAll(COLS, st)
+  const data = (await fetchAll(COLS, st)).map(withDisplayNames)
   // National totals for the comparison paragraphs. Null-guarded below —
   // every stat renders only when its inputs exist.
   const national = data.length ? await fetchAll('fy2025_total_ssvi', null) : []

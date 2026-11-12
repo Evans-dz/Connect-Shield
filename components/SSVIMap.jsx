@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { geoAlbersUsa, geoPath } from 'd3-geo'
 import { feature } from 'topojson-client'
 import { createClient } from '@supabase/supabase-js'
+import { displayName } from '@/lib/names'
 
 const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -399,10 +400,10 @@ export default function SSVIMap({ states }) {
                     >
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-medium text-slate-900">
-                          {r.hospice_name}
+                          {displayName(r.hospice_name)}
                         </span>
                         <span className="block text-xs text-slate-500">
-                          {r.city}
+                          {displayName(r.city)}
                           {r.ssvi_change != null && r.ssvi_change !== 0
                             ? ` · ${r.ssvi_change > 0 ? '+' : ''}${r.ssvi_change} vs FY2024`
                             : ''}

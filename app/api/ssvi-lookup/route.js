@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabasePublic, riskFromScore } from "@/lib/supabase";
+import { displayName } from "@/lib/names";
 
 // Public teaser lookup. Deliberately returns ONLY the total score, risk band,
 // year-over-year delta, and AGGREGATE counts (how many utilization flags, the
@@ -93,7 +94,7 @@ export async function GET(req) {
 
   return NextResponse.json({
     ccn: data.ccn,
-    hospice_name: data.hospice_name,
+    hospice_name: displayName(data.hospice_name),
     year,
     total,
     risk: risk.label,

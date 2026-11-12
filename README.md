@@ -135,3 +135,15 @@ in commits `be3171b`, `837e365`, `c4b7888`, `50c64ce` and `d3f5fec`, merged to `
 - **Share images:** solution pages restate the share image their openGraph block had dropped.
 - **`public/llms.txt`** added and excluded from the auth middleware, like `robots.txt`.
 - It already had a custom 404, privacy and terms before this pass.
+
+## Agency names (2026-11-12)
+
+CMS publishes most agency names and cities in all caps. `lib/names.js` (`displayName`,
+`withDisplayNames`) title-cases text that arrives all caps and leaves mixed-case names alone,
+so "SOUTHERN GRACE HOSPICE AND PALLIATIVE CARE, MCDONOUGH" shows as "Southern Grace Hospice
+and Palliative Care, McDonough". Display only: slugs, lookups and stored values are unchanged.
+It is applied where rows are loaded: the agency page, state pages, the SSVI map and search,
+`/api/ssvi-lookup`, `/api/ssvi`, share links, `fetchPublicRow` and the agency share image.
+Acronyms with no vowel (LLC, VNS) stay upper; add exceptions to `ACRONYMS` or `BRANDS` there.
+The same pass formats national ranks with thousands separators and gives the agency share
+image a CDN fallback for its logo (the dynamic route could not read `public/` on Vercel).
